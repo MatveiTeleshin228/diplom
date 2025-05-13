@@ -84,6 +84,7 @@ class Database:
                 host='aws-0-eu-north-1.pooler.supabase.com',
                 port='6543'
             )
+            self.connection.autocommit = False
             logging.info("Успешное подключение к базе данных")
         except Exception as e:
             logging.error(f"Ошибка подключения к базе данных: {e}")
@@ -93,19 +94,19 @@ class Database:
         try:
             with self.connection.cursor() as cursor:
                 cursor.execute(query, params)
+                
                 if fetch:
                     result = cursor.fetchall()
-                    if cursor.description:
-                        columns = [desc[0] for desc in cursor.description]
-                    else:
-                        columns = []
+                    columns = [desc[0] for desc in cursor.description] if cursor.description else []
+                    self.connection.commit()
                     return result, columns
                 else:
                     self.connection.commit()
                     return True
+                    
         except Exception as e:
-            logging.error(f"Ошибка выполнения запроса: {e}")
             self.connection.rollback()
+            logging.error(f"Ошибка выполнения запроса: {e}")
             return False
     
     def close(self):
@@ -247,23 +248,40 @@ class StudentsTableModel(QAbstractTableModel):
         return None
 
     def add_student(self, student):
+        # Проверяем подключение
+        if not db.connection or db.connection.closed:
+            db.connect()
+        
         query = """
         INSERT INTO students (fio, pol, vozrast, kurs, fakultet) 
         VALUES (%s, %s, %s, %s, %s) RETURNING id
         """
         params = (
-            student["fio"], student["pol"], student["vozrast"], 
+            student["fio"], student["pol"], student["vozrast"],
             student["kurs"], student["fakultet"]
         )
-        result = db.execute_query(query, params, fetch=True)
-        if result:
-            new_id = result[0][0][0]
-            student["id"] = str(new_id)
-            self.beginInsertRows(QModelIndex(), self.rowCount(), self.rowCount())
-            self._students.append(student)
-            self.endInsertRows()
-            logging.info("Добавлен студент: %s", student)
-            return True
+        
+        try:
+            # Выполняем запрос
+            result, _ = db.execute_query(query, params, fetch=True)
+            
+            if result:  # Если есть результат
+                new_id = result[0][0]  # Получаем ID
+                student["id"] = str(new_id)
+                
+                # Добавляем в модель
+                row_position = len(self._students)
+                self.beginInsertRows(QModelIndex(), row_position, row_position)
+                self._students.append(student)
+                self.endInsertRows()
+                
+                logging.info(f"Добавлен студент ID {new_id}: {student}")
+                return True
+                
+        except Exception as e:
+            logging.error(f"Ошибка при добавлении студента: {e}")
+            db.connection.rollback()
+        
         return False
 
     def update_student(self, row, student):
@@ -717,6 +735,8 @@ class StudentsWidget(QWidget):
         if dialog.exec() == QDialog.Accepted:
             student = dialog.get_student_data()
             if self.students_model.add_student(student):
+                # Принудительно обновляем представление
+                self.students_model.layoutChanged.emit()
                 QMessageBox.information(self, "Успех", "Студент успешно добавлен.")
             else:
                 QMessageBox.warning(self, "Ошибка", "Не удалось добавить студента.")
