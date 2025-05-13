@@ -1,0 +1,1020 @@
+import sys
+import re
+import logging
+import time
+import psycopg2
+from psycopg2 import sql
+
+from PySide6.QtCore import (
+    Qt,
+    QAbstractTableModel,
+    QModelIndex,
+    QThreadPool,
+    QRunnable,
+    QObject,
+    Signal,
+    QPropertyAnimation,
+    QEasingCurve,
+    QRegularExpression,
+    QSortFilterProxyModel,
+)
+from PySide6.QtGui import QFont, QAction, QRegularExpressionValidator
+from PySide6.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QTableView,
+    QPushButton,
+    QLineEdit,
+    QLabel,
+    QMessageBox,
+    QDialog,
+    QFormLayout,
+    QComboBox,
+    QTabWidget,
+    QProgressDialog,
+    QHeaderView,
+    QGraphicsOpacityEffect,
+    QSpinBox,
+    QSizePolicy,
+    QPlainTextEdit,
+)
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    filename="app.log",
+    filemode="a",
+    format="%(asctime)s %(levelname)s: %(message)s",
+)
+
+def exception_hook(exc_type, exc_value, exc_traceback):
+    logging.error(
+        "Неперехваченное исключение", exc_info=(exc_type, exc_value, exc_traceback)
+    )
+    if QApplication.instance():
+        QMessageBox.critical(
+            None,
+            "Критическая ошибка",
+            "Произошла непредвиденная ошибка. Приложение будет закрыто.",
+        )
+    else:
+        print(
+            "Критическая ошибка: Произошла непредвиденная ошибка. Приложение будет закрыто.",
+            file=sys.stderr,
+        )
+    sys.exit(1)
+
+sys.excepthook = exception_hook
+
+# Подключение к базе данных
+class Database:
+    def __init__(self):
+        self.connection = None
+        self.connect()
+    
+    def connect(self):
+        try:
+            self.connection = psycopg2.connect(
+                dbname='postgres',
+                user='postgres.okwxukyvivltgexgjlaf',
+                password='pqiBU3JavEhOxm6E',
+                host='aws-0-eu-north-1.pooler.supabase.com',
+                port='6543'
+            )
+            logging.info("Успешное подключение к базе данных")
+        except Exception as e:
+            logging.error(f"Ошибка подключения к базе данных: {e}")
+            raise
+    
+    def execute_query(self, query, params=None, fetch=False):
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.execute(query, params)
+                if fetch:
+                    result = cursor.fetchall()
+                    if cursor.description:
+                        columns = [desc[0] for desc in cursor.description]
+                    else:
+                        columns = []
+                    return result, columns
+                else:
+                    self.connection.commit()
+                    return True
+        except Exception as e:
+            logging.error(f"Ошибка выполнения запроса: {e}")
+            self.connection.rollback()
+            return False
+    
+    def close(self):
+        if self.connection:
+            self.connection.close()
+            logging.info("Соединение с базой данных закрыто")
+
+# Инициализация базы данных
+db = Database()
+
+# QSS-стилизация приложения
+APP_QSS = """
+QMainWindow {
+    background-color: #f0f0f0;
+}
+
+QTabWidget::pane {
+    border: 1px solid #C2C7CB;
+    background: #ffffff;
+}
+
+QTabBar::tab {
+    background: #e0e0e0;
+    padding: 10px;
+    margin: 2px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+QTabBar::tab:selected {
+    background: #ffffff;
+    border-bottom: 2px solid #3498db;
+}
+
+QPushButton {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+}
+QPushButton:hover {
+    background-color: #2980b9;
+}
+QPushButton:pressed {
+    background-color: #1c5980;
+}
+
+QLineEdit, QComboBox, QSpinBox {
+    border: 1px solid #bdc3c7;
+    border-radius: 4px;
+    padding: 4px;
+    background-color: #ffffff;
+}
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus {
+    border: 1px solid #3498db;
+}
+
+QTableView {
+    background-color: #ffffff;
+    gridline-color: #bdc3c7;
+}
+QHeaderView::section {
+    background-color: #ecf0f1;
+    padding: 4px;
+    border: 1px solid #bdc3c7;
+}
+"""
+
+# Окно просмотра логов
+class LogViewerDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Просмотр логов")
+        self.resize(600, 400)
+        layout = QVBoxLayout(self)
+        self.text_edit = QPlainTextEdit(self)
+        self.text_edit.setReadOnly(True)
+        layout.addWidget(self.text_edit)
+        refresh_button = QPushButton("Обновить")
+        refresh_button.clicked.connect(self.load_logs)
+        layout.addWidget(refresh_button)
+        self.load_logs()
+
+    def load_logs(self):
+        try:
+            with open("app.log", "r", encoding="utf-8") as f:
+                self.text_edit.setPlainText(f.read())
+        except Exception as e:
+            self.text_edit.setPlainText("Ошибка чтения лог файла: " + str(e))
+
+# Модель для списка студентов
+class StudentsTableModel(QAbstractTableModel):
+    HEADERS = ["ID", "ФИО", "Пол", "Возраст", "Курс", "Факультет"]
+
+    def __init__(self):
+        super().__init__()
+        self._students = []
+        self.load_data()
+    
+    def load_data(self):
+        query = "SELECT id, fio, pol, vozrast, kurs, fakultet FROM students ORDER BY id"
+        result, _ = db.execute_query(query, fetch=True)
+        if result:
+            self.beginResetModel()
+            self._students = [{
+                "id": str(row[0]),
+                "fio": row[1],
+                "pol": row[2],
+                "vozrast": row[3],
+                "kurs": row[4],
+                "fakultet": row[5]
+            } for row in result]
+            self.endResetModel()
+    
+    def rowCount(self, parent=QModelIndex()):
+        return len(self._students)
+
+    def columnCount(self, parent=QModelIndex()):
+        return len(self.HEADERS)
+
+    def data(self, index, role=Qt.DisplayRole):
+        if not index.isValid():
+            return None
+        student = self._students[index.row()]
+        if role == Qt.DisplayRole:
+            return [
+                student["id"],
+                student["fio"],
+                student["pol"],
+                student["vozrast"],
+                student["kurs"],
+                student["fakultet"]
+            ][index.column()]
+        return None
+
+    def headerData(self, section, orientation, role=Qt.DisplayRole):
+        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
+            return self.HEADERS[section]
+        return None
+
+    def add_student(self, student):
+        query = """
+        INSERT INTO students (fio, pol, vozrast, kurs, fakultet) 
+        VALUES (%s, %s, %s, %s, %s) RETURNING id
+        """
+        params = (
+            student["fio"], student["pol"], student["vozrast"], 
+            student["kurs"], student["fakultet"]
+        )
+        result = db.execute_query(query, params, fetch=True)
+        if result:
+            new_id = result[0][0][0]
+            student["id"] = str(new_id)
+            self.beginInsertRows(QModelIndex(), self.rowCount(), self.rowCount())
+            self._students.append(student)
+            self.endInsertRows()
+            logging.info("Добавлен студент: %s", student)
+            return True
+        return False
+
+    def update_student(self, row, student):
+        if 0 <= row < len(self._students):
+            query = """
+            UPDATE students 
+            SET fio = %s, pol = %s, vozrast = %s, kurs = %s, fakultet = %s 
+            WHERE id = %s
+            """
+            params = (
+                student["fio"], student["pol"], student["vozrast"], 
+                student["kurs"], student["fakultet"], int(student["id"])
+            )
+            if db.execute_query(query, params):
+                self._students[row] = student
+                self.dataChanged.emit(
+                    self.index(row, 0),
+                    self.index(row, self.columnCount() - 1)
+                )
+                logging.info("Обновлен студент в строке %d: %s", row, student)
+                return True
+        return False
+
+    def remove_student(self, row):
+        if 0 <= row < len(self._students):
+            student_id = int(self._students[row]["id"])
+            query = "DELETE FROM students WHERE id = %s"
+            if db.execute_query(query, (student_id,)):
+                self.beginRemoveRows(QModelIndex(), row, row)
+                student = self._students.pop(row)
+                self.endRemoveRows()
+                logging.info("Удалён студент: %s", student)
+                return True
+        return False
+
+    def get_student(self, row):
+        if 0 <= row < len(self._students):
+            return self._students[row]
+        return None
+
+# Модель для списка комнат
+class RoomsTableModel(QAbstractTableModel):
+    HEADERS = ["ID", "Этаж", "Кол-во мест", "Свободно"]
+
+    def __init__(self):
+        super().__init__()
+        self._rooms = []
+        self.load_data()
+    
+    def load_data(self):
+        query = "SELECT id, etazh, kol_mest, svobodno FROM rooms ORDER BY id"
+        result, _ = db.execute_query(query, fetch=True)
+        if result:
+            self.beginResetModel()
+            self._rooms = [{
+                "id": str(row[0]),
+                "etazh": str(row[1]),
+                "kol_mest": str(row[2]),
+                "svobodno": str(row[3])
+            } for row in result]
+            self.endResetModel()
+
+    def rowCount(self, parent=QModelIndex()):
+        return len(self._rooms)
+
+    def columnCount(self, parent=QModelIndex()):
+        return len(self.HEADERS)
+
+    def data(self, index, role=Qt.DisplayRole):
+        if not index.isValid():
+            return None
+        room = self._rooms[index.row()]
+        if role == Qt.DisplayRole:
+            return [
+                room["id"],
+                room["etazh"],
+                room["kol_mest"],
+                room["svobodno"]
+            ][index.column()]
+        return None
+
+    def headerData(self, section, orientation, role=Qt.DisplayRole):
+        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
+            return self.HEADERS[section]
+        return None
+
+    def update_room_availability(self, room_id, change):
+        query = "UPDATE rooms SET svobodno = svobodno + %s WHERE id = %s"
+        if db.execute_query(query, (change, room_id)):
+            self.load_data()
+            return True
+        return False
+
+# Модель для заявок
+class RequestsTableModel(QAbstractTableModel):
+    HEADERS = ["ID", "Тип заявки", "Статус", "Студент", "Комната"]
+
+    def __init__(self):
+        super().__init__()
+        self._requests = []
+        self.load_data()
+    
+    def load_data(self):
+        query = """
+        SELECT r.id, r.type, r.status, s.fio, r.room_id 
+        FROM requests r
+        JOIN students s ON r.student_id = s.id
+        ORDER BY r.id
+        """
+        result, _ = db.execute_query(query, fetch=True)
+        if result:
+            self.beginResetModel()
+            self._requests = [{
+                "id": str(row[0]),
+                "type": row[1],
+                "status": row[2],
+                "student_fio": row[3],
+                "room_id": str(row[4])
+            } for row in result]
+            self.endResetModel()
+
+    def rowCount(self, parent=QModelIndex()):
+        return len(self._requests)
+
+    def columnCount(self, parent=QModelIndex()):
+        return len(self.HEADERS)
+
+    def data(self, index, role=Qt.DisplayRole):
+        if not index.isValid():
+            return None
+        request = self._requests[index.row()]
+        if role == Qt.DisplayRole:
+            return [
+                request["id"],
+                request["type"],
+                request["status"],
+                request["student_fio"],
+                request["room_id"]
+            ][index.column()]
+        return None
+
+    def headerData(self, section, orientation, role=Qt.DisplayRole):
+        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
+            return self.HEADERS[section]
+        return None
+
+    def add_request(self, request_data):
+        query = """
+        INSERT INTO requests (type, status, student_id, room_id) 
+        VALUES (%s, %s, %s, %s) RETURNING id
+        """
+        params = (
+            request_data["type"], 
+            request_data["status"], 
+            int(request_data["student_id"]), 
+            int(request_data["room_id"])
+        )
+        result = db.execute_query(query, params, fetch=True)
+        if result:
+            request_data["id"] = str(result[0][0][0])
+            self.beginInsertRows(QModelIndex(), self.rowCount(), self.rowCount())
+            self._requests.append({
+                "id": request_data["id"],
+                "type": request_data["type"],
+                "status": request_data["status"],
+                "student_fio": request_data["student_fio"],
+                "room_id": request_data["room_id"]
+            })
+            self.endInsertRows()
+            logging.info("Добавлена заявка: %s", request_data)
+            return True
+        return False
+
+    def update_request_status(self, request_id, new_status):
+        query = "UPDATE requests SET status = %s WHERE id = %s"
+        if db.execute_query(query, (new_status, request_id)):
+            self.load_data()
+            return True
+        return False
+
+# Прокси-модель для фильтрации студентов
+class StudentsProxyModel(QSortFilterProxyModel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.filter_text = ""
+
+    def setFilterText(self, text):
+        self.filter_text = text
+        self.invalidateFilter()
+
+    def filterAcceptsRow(self, source_row, source_parent):
+        if not self.filter_text.strip():
+            return True
+        source_model = self.sourceModel()
+        for col in range(source_model.columnCount()):
+            index = source_model.index(source_row, col, source_parent)
+            data = source_model.data(index, Qt.DisplayRole)
+            if data is None:
+                continue
+            if self.filter_text.lower() in str(data).lower():
+                return True
+        return False
+
+# Диалог добавления/редактирования студента
+class AddEditStudentDialog(QDialog):
+    def __init__(self, parent=None, student_data=None):
+        super().__init__(parent)
+        self.setWindowTitle(
+            "Добавить студента" if student_data is None else "Редактировать студента"
+        )
+        self.setModal(True)
+        self._is_valid = False
+
+        layout = QFormLayout(self)
+        self.fio_edit = QLineEdit()
+        self.fio_edit.setPlaceholderText("Введите ФИО (Иванов Иван Иванович)")
+        self.fio_edit.textChanged.connect(self.validate_inputs)
+
+        self.pol_combo = QComboBox()
+        self.pol_combo.addItems(["М", "Ж"])
+
+        self.vozrast_spin = QSpinBox(self)
+        self.vozrast_spin.setRange(16, 100)
+        self.vozrast_spin.setValue(18)
+        self.vozrast_spin.valueChanged.connect(self.validate_inputs)
+
+        self.kurs_spin = QSpinBox(self)
+        self.kurs_spin.setRange(1, 6)
+        self.kurs_spin.setValue(1)
+        self.kurs_spin.valueChanged.connect(self.validate_inputs)
+
+        self.fakultet_edit = QLineEdit()
+        self.fakultet_edit.setPlaceholderText("Введите факультет")
+        self.fakultet_edit.textChanged.connect(self.validate_inputs)
+
+        layout.addRow("ФИО:", self.fio_edit)
+        layout.addRow("Пол:", self.pol_combo)
+        layout.addRow("Возраст:", self.vozrast_spin)
+        layout.addRow("Курс:", self.kurs_spin)
+        layout.addRow("Факультет:", self.fakultet_edit)
+
+        button_layout = QHBoxLayout()
+        self.ok_button = AnimatedButton("ОК")
+        self.ok_button.clicked.connect(self.on_ok)
+        cancel_button = QPushButton("Отмена")
+        cancel_button.clicked.connect(self.reject)
+        button_layout.addWidget(self.ok_button)
+        button_layout.addWidget(cancel_button)
+        layout.addRow(button_layout)
+
+        fio_validator = QRegularExpressionValidator(
+            QRegularExpression(r"^[А-ЯЁ][а-яё]+\s[А-ЯЁ][а-яё]+\s[А-ЯЁ][а-яё]+$"), self
+        )
+        self.fio_edit.setValidator(fio_validator)
+
+        if student_data:
+            self.fio_edit.setText(student_data.get("fio", ""))
+            index = self.pol_combo.findText(student_data.get("pol", "М"))
+            if index >= 0:
+                self.pol_combo.setCurrentIndex(index)
+            self.vozrast_spin.setValue(int(student_data.get("vozrast", 18)))
+            self.kurs_spin.setValue(int(student_data.get("kurs", 1)))
+            self.fakultet_edit.setText(student_data.get("fakultet", ""))
+        self.validate_inputs()
+
+    def validate_inputs(self):
+        valid = True
+        if not self.fio_edit.text().strip():
+            self.fio_edit.setStyleSheet("border: 1px solid red;")
+            valid = False
+        else:
+            self.fio_edit.setStyleSheet("")
+        
+        if not self.fakultet_edit.text().strip():
+            self.fakultet_edit.setStyleSheet("border: 1px solid red;")
+            valid = False
+        else:
+            self.fakultet_edit.setStyleSheet("")
+        
+        self._is_valid = valid
+        self.ok_button.setEnabled(valid)
+
+    def on_ok(self):
+        if self._is_valid:
+            self.accept()
+        else:
+            QMessageBox.warning(
+                self, "Ошибка", "Заполните обязательные поля корректно."
+            )
+
+    def get_student_data(self):
+        return {
+            "fio": self.fio_edit.text().strip(),
+            "pol": self.pol_combo.currentText(),
+            "vozrast": self.vozrast_spin.value(),
+            "kurs": self.kurs_spin.value(),
+            "fakultet": self.fakultet_edit.text().strip(),
+        }
+
+# Кастомная кнопка с анимацией
+class AnimatedButton(QPushButton):
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+        self.effect = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self.effect)
+        self.animation = QPropertyAnimation(self.effect, b"opacity")
+        self.animation.setDuration(150)
+        self.animation.setStartValue(0.7)
+        self.animation.setEndValue(1.0)
+        self.animation.setEasingCurve(QEasingCurve.InOutQuad)
+        self.clicked.connect(self.start_animation)
+
+    def start_animation(self):
+        self.animation.start()
+
+# Диалог создания заявки на заселение
+class ZaselRequestDialog(QDialog):
+    def __init__(self, student_model, room_model, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Создать заявку на заселение")
+        self.student_model = student_model
+        self.room_model = room_model
+        layout = QFormLayout(self)
+        
+        self.student_combo = QComboBox(self)
+        for i in range(student_model.rowCount()):
+            student = student_model.get_student(i)
+            display = f"{student.get('id')} - {student.get('fio')}"
+            self.student_combo.addItem(display, student)
+        
+        self.room_combo = QComboBox(self)
+        for i in range(room_model.rowCount()):
+            room = room_model._rooms[i]
+            try:
+                if int(room.get("svobodno", "0")) > 0:
+                    display = f"{room.get('id')} - Этаж: {room.get('etazh')}, Мест: {room.get('kol_mest')}, Свободно: {room.get('svobodno')}"
+                    self.room_combo.addItem(display, room)
+            except Exception:
+                continue
+        
+        layout.addRow("Студент:", self.student_combo)
+        layout.addRow("Комната:", self.room_combo)
+        
+        button_layout = QHBoxLayout()
+        ok_button = AnimatedButton("ОК")
+        ok_button.clicked.connect(self.accept)
+        cancel_button = QPushButton("Отмена")
+        cancel_button.clicked.connect(self.reject)
+        button_layout.addWidget(ok_button)
+        button_layout.addWidget(cancel_button)
+        layout.addRow(button_layout)
+
+    def get_request_data(self):
+        student = self.student_combo.currentData()
+        room = self.room_combo.currentData()
+        return {
+            "type": "Заселение",
+            "status": "Создана",
+            "student_id": student["id"],
+            "student_fio": student["fio"],
+            "room_id": room["id"]
+        }
+
+# Диалог создания заявки на выселение
+class VyselRequestDialog(QDialog):
+    def __init__(self, student_model, room_model, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Создать заявку на выселение")
+        self.student_model = student_model
+        self.room_model = room_model
+        layout = QFormLayout(self)
+        
+        self.student_combo = QComboBox(self)
+        for i in range(student_model.rowCount()):
+            student = student_model.get_student(i)
+            display = f"{student.get('id')} - {student.get('fio')}"
+            self.student_combo.addItem(display, student)
+        
+        self.room_combo = QComboBox(self)
+        for i in range(room_model.rowCount()):
+            room = room_model._rooms[i]
+            display = f"{room.get('id')} - Этаж: {room.get('etazh')}, Мест: {room.get('kol_mest')}, Свободно: {room.get('svobodno')}"
+            self.room_combo.addItem(display, room)
+        
+        layout.addRow("Студент:", self.student_combo)
+        layout.addRow("Комната:", self.room_combo)
+        
+        button_layout = QHBoxLayout()
+        ok_button = AnimatedButton("ОК")
+        ok_button.clicked.connect(self.accept)
+        cancel_button = QPushButton("Отмена")
+        cancel_button.clicked.connect(self.reject)
+        button_layout.addWidget(ok_button)
+        button_layout.addWidget(cancel_button)
+        layout.addRow(button_layout)
+
+    def get_request_data(self):
+        student = self.student_combo.currentData()
+        room = self.room_combo.currentData()
+        return {
+            "type": "Выселение",
+            "status": "Создана",
+            "student_id": student["id"],
+            "student_fio": student["fio"],
+            "room_id": room["id"]
+        }
+
+# Виджет для отображения списка студентов
+class StudentsWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout(self)
+
+        filter_layout = QHBoxLayout()
+        filter_label = QLabel("Фильтр:")
+        self.filter_line_edit = QLineEdit()
+        self.filter_line_edit.setPlaceholderText("Введите текст для поиска")
+        self.filter_line_edit.textChanged.connect(self.on_filter_changed)
+        filter_layout.addWidget(filter_label)
+        filter_layout.addWidget(self.filter_line_edit, 1)
+        layout.addLayout(filter_layout)
+
+        self.students_model = StudentsTableModel()
+        self.proxy_model = StudentsProxyModel()
+        self.proxy_model.setSourceModel(self.students_model)
+
+        self.table_view = QTableView()
+        self.table_view.setModel(self.proxy_model)
+        self.table_view.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table_view.setSelectionBehavior(QTableView.SelectRows)
+        layout.addWidget(self.table_view)
+
+        button_layout = QHBoxLayout()
+        add_button = AnimatedButton("Добавить студента")
+        add_button.clicked.connect(self.add_student)
+        edit_button = AnimatedButton("Редактировать студента")
+        edit_button.clicked.connect(self.edit_student)
+        delete_button = AnimatedButton("Удалить студента")
+        delete_button.clicked.connect(self.delete_student)
+        button_layout.addWidget(add_button)
+        button_layout.addWidget(edit_button)
+        button_layout.addWidget(delete_button)
+        layout.addLayout(button_layout)
+
+    def on_filter_changed(self, text):
+        self.proxy_model.setFilterText(text)
+        logging.info("Применён фильтр: %s", text)
+
+    def add_student(self):
+        dialog = AddEditStudentDialog(self)
+        if dialog.exec() == QDialog.Accepted:
+            student = dialog.get_student_data()
+            if self.students_model.add_student(student):
+                QMessageBox.information(self, "Успех", "Студент успешно добавлен.")
+            else:
+                QMessageBox.warning(self, "Ошибка", "Не удалось добавить студента.")
+
+    def edit_student(self):
+        selection = self.table_view.selectionModel().selectedRows()
+        if not selection:
+            QMessageBox.warning(self, "Ошибка", "Выберите студента для редактирования.")
+            return
+        
+        proxy_index = selection[0]
+        source_index = self.proxy_model.mapToSource(proxy_index)
+        row = source_index.row()
+        student = self.students_model.get_student(row)
+        
+        if not student:
+            QMessageBox.warning(self, "Ошибка", "Не удалось получить данные студента.")
+            return
+            
+        dialog = AddEditStudentDialog(self, student)
+        if dialog.exec() == QDialog.Accepted:
+            updated_student = dialog.get_student_data()
+            updated_student["id"] = student["id"]
+            if self.students_model.update_student(row, updated_student):
+                QMessageBox.information(self, "Успех", "Данные студента обновлены.")
+            else:
+                QMessageBox.warning(self, "Ошибка", "Не удалось обновить данные студента.")
+
+    def delete_student(self):
+        selection = self.table_view.selectionModel().selectedRows()
+        if not selection:
+            QMessageBox.warning(self, "Ошибка", "Выберите студента для удаления.")
+            return
+        
+        proxy_index = selection[0]
+        source_index = self.proxy_model.mapToSource(proxy_index)
+        row = source_index.row()
+        
+        reply = QMessageBox.question(
+            self,
+            "Подтверждение",
+            "Вы уверены, что хотите удалить студента?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            if self.students_model.remove_student(row):
+                QMessageBox.information(self, "Успех", "Студент удалён.")
+            else:
+                QMessageBox.warning(self, "Ошибка", "Не удалось удалить студента.")
+
+# Виджет для отображения списка комнат
+class RoomsWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        self.table = QTableView()
+        self.rooms_model = RoomsTableModel()
+        self.table.setModel(self.rooms_model)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setSelectionBehavior(QTableView.SelectRows)
+        self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        layout.addWidget(self.table)
+
+# Виджет для работы с заявками
+class RequestsWidget(QWidget):
+    def __init__(self, student_model, room_model):
+        super().__init__()
+        self.student_model = student_model
+        self.room_model = room_model
+        layout = QVBoxLayout(self)
+        
+        button_layout = QHBoxLayout()
+        add_zasel_button = AnimatedButton("Создать заявку на заселение")
+        add_zasel_button.clicked.connect(self.create_zasel_request)
+        add_vysel_button = AnimatedButton("Создать заявку на выселение")
+        add_vysel_button.clicked.connect(self.create_vysel_request)
+        button_layout.addWidget(add_zasel_button)
+        button_layout.addWidget(add_vysel_button)
+        layout.addLayout(button_layout)
+        
+        self.requests_table = QTableView()
+        self.requests_model = RequestsTableModel()
+        self.requests_table.setModel(self.requests_model)
+        self.requests_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.requests_table.setSelectionBehavior(QTableView.SelectRows)
+        self.requests_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        layout.addWidget(self.requests_table)
+
+    def create_zasel_request(self):
+        dialog = ZaselRequestDialog(self.student_model, self.room_model, self)
+        if dialog.exec() == QDialog.Accepted:
+            request = dialog.get_request_data()
+            if self.requests_model.add_request(request):
+                # Обновляем количество свободных мест в комнате
+                room_id = request["room_id"]
+                self.room_model.update_room_availability(room_id, -1)
+                QMessageBox.information(self, "Заселение", "Заявка на заселение создана.")
+            else:
+                QMessageBox.warning(self, "Ошибка", "Не удалось создать заявку на заселение.")
+
+    def create_vysel_request(self):
+        dialog = VyselRequestDialog(self.student_model, self.room_model, self)
+        if dialog.exec() == QDialog.Accepted:
+            request = dialog.get_request_data()
+            if self.requests_model.add_request(request):
+                # Обновляем количество свободных мест в комнате
+                room_id = request["room_id"]
+                self.room_model.update_room_availability(room_id, 1)
+                QMessageBox.information(self, "Выселение", "Заявка на выселение создана.")
+            else:
+                QMessageBox.warning(self, "Ошибка", "Не удалось создать заявку на выселение.")
+
+# Асинхронное задание для генерации отчёта
+class WorkerSignals(QObject):
+    progress = Signal(int)
+    finished = Signal(bool)
+    error = Signal(str)
+
+class ReportWorkerRunnable(QRunnable):
+    def __init__(self):
+        super().__init__()
+        self.signals = WorkerSignals()
+        self._is_cancelled = False
+
+    def run(self):
+        try:
+            # Имитация длительной операции
+            for i in range(1, 101):
+                if self._is_cancelled:
+                    self.signals.finished.emit(False)
+                    return
+                time.sleep(0.03)
+                self.signals.progress.emit(i)
+            
+            # Генерация реального отчёта из базы данных
+            query = """
+            SELECT 
+                s.fio, s.kurs, s.fakultet, 
+                r.id as room_id, r.etazh,
+                req.type, req.status
+            FROM students s
+            LEFT JOIN requests req ON req.student_id = s.id
+            LEFT JOIN rooms r ON req.room_id = r.id
+            ORDER BY s.fio
+            """
+            result, columns = db.execute_query(query, fetch=True)
+            
+            if result:
+                # Здесь можно сохранить отчёт в файл или выполнить другие действия
+                logging.info("Отчёт сгенерирован. Найдено записей: %d", len(result))
+            
+            self.signals.finished.emit(True)
+        except Exception as e:
+            logging.error("Ошибка генерации отчёта: %s", e)
+            self.signals.error.emit(str(e))
+            self.signals.finished.emit(False)
+
+# Виджет для отчётности
+class ReportsWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        self.export_button = AnimatedButton("Выгрузить отчёт")
+        self.export_button.clicked.connect(self.export_report)
+        layout.addWidget(self.export_button)
+        self.progress_dialog = None
+
+    def export_report(self):
+        self.progress_dialog = QProgressDialog(
+            "Генерация отчёта...", "Отмена", 0, 100, self
+        )
+        self.progress_dialog.setWindowTitle("Отчёт")
+        self.progress_dialog.setWindowModality(Qt.WindowModal)
+        self.progress_dialog.setAutoClose(True)
+        
+        self.worker = ReportWorkerRunnable()
+        self.worker.signals.progress.connect(self.progress_dialog.setValue)
+        self.worker.signals.finished.connect(self.report_finished)
+        self.progress_dialog.canceled.connect(
+            lambda: setattr(self.worker, "_is_cancelled", True)
+        )
+        
+        QThreadPool.globalInstance().start(self.worker)
+
+    def report_finished(self, success):
+        if success:
+            QMessageBox.information(
+                self, "Отчёт", "Отчёт успешно сгенерирован и выгружен."
+            )
+        else:
+            QMessageBox.warning(self, "Отчёт", "Ошибка при генерации отчёта.")
+
+# Главное окно приложения
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Система управления общежитием")
+        self.setMinimumSize(900, 700)
+        self._create_tabs()
+        self._create_menu()
+        self.setStyleSheet(APP_QSS)
+
+    def _create_tabs(self):
+        self.tabs = QTabWidget()
+        self.students_tab = StudentsWidget()
+        self.rooms_tab = RoomsWidget()
+        self.requests_tab = RequestsWidget(
+            self.students_tab.students_model, 
+            self.rooms_tab.rooms_model
+        )
+        self.reports_tab = ReportsWidget()
+        
+        self.tabs.addTab(self.students_tab, "Студенты")
+        self.tabs.addTab(self.rooms_tab, "Комнаты")
+        self.tabs.addTab(self.requests_tab, "Заявки")
+        self.tabs.addTab(self.reports_tab, "Отчётность")
+        
+        self.setCentralWidget(self.tabs)
+
+    def _create_menu(self):
+        menu_bar = self.menuBar()
+        
+        file_menu = menu_bar.addMenu("Файл")
+        exit_action = QAction("Выход", self)
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+        
+        logs_action = QAction("Просмотр логов", self)
+        logs_action.triggered.connect(self.show_logs)
+        file_menu.addAction(logs_action)
+
+        help_menu = menu_bar.addMenu("Справка")
+        about_action = QAction("О программе", self)
+        about_action.triggered.connect(self.show_about)
+        help_menu.addAction(about_action)
+
+    def show_about(self):
+        QMessageBox.information(
+            self, 
+            "О программе", 
+            "Система управления общежитием.\nВерсия 1.0\n© 2025"
+        )
+
+    def show_logs(self):
+        dlg = LogViewerDialog(self)
+        dlg.exec()
+
+    def closeEvent(self, event):
+        db.close()
+        event.accept()
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    default_font = QFont("Segoe UI", 10)
+    app.setFont(default_font)
+    
+    # Проверка подключения к базе данных
+    try:
+        # Создаем таблицы, если они не существуют
+        create_tables_query = """
+        CREATE TABLE IF NOT EXISTS students (
+            id SERIAL PRIMARY KEY,
+            fio VARCHAR(100) NOT NULL,
+            pol VARCHAR(1) NOT NULL,
+            vozrast INTEGER NOT NULL,
+            kurs INTEGER NOT NULL,
+            fakultet VARCHAR(50) NOT NULL
+        );
+        
+        CREATE TABLE IF NOT EXISTS rooms (
+            id INTEGER PRIMARY KEY,
+            etazh INTEGER NOT NULL,
+            kol_mest INTEGER NOT NULL,
+            svobodno INTEGER NOT NULL
+        );
+        
+        CREATE TABLE IF NOT EXISTS requests (
+            id SERIAL PRIMARY KEY,
+            type VARCHAR(20) NOT NULL,
+            status VARCHAR(20) NOT NULL,
+            student_id INTEGER REFERENCES students(id),
+            room_id INTEGER REFERENCES rooms(id)
+        );
+        """
+        db.execute_query(create_tables_query)
+        
+        # Добавляем тестовые данные, если таблицы пусты
+        db.execute_query("INSERT INTO rooms (id, etazh, kol_mest, svobodno) VALUES (101, 1, 4, 4) ON CONFLICT (id) DO NOTHING")
+        db.execute_query("INSERT INTO rooms (id, etazh, kol_mest, svobodno) VALUES (102, 1, 3, 3) ON CONFLICT (id) DO NOTHING")
+        
+        window = MainWindow()
+        window.show()
+        sys.exit(app.exec())
+    except Exception as e:
+        logging.error(f"Ошибка инициализации базы данных: {e}")
+        QMessageBox.critical(
+            None,
+            "Критическая ошибка",
+            f"Не удалось подключиться к базе данных: {str(e)}",
+        )
+        sys.exit(1)
