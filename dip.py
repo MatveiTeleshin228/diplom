@@ -560,9 +560,9 @@ class RequestsTableModel(QAbstractTableModel):
                 for i, req in enumerate(self._requests):
                     if req["id"] == str(request_id):
                         self._requests[i]["status"] = new_status
-                        self.dataChanged.emit(
-                            self.index(i, 0), self.index(i, self.columnCount() - 1)
-                        )
+                        # Используем beginResetModel/endResetModel для полного обновления
+                        self.beginResetModel()
+                        self.endResetModel()
                         break
 
                 # Обновляем комнату и связь студента если заявка Выполнена
@@ -575,7 +575,6 @@ class RequestsTableModel(QAbstractTableModel):
         except Exception as e:
             logging.error(f"Ошибка при обновлении статуса заявки: {e}")
             return False
-
 
     def _update_room_availability(self, request_id):
         """Обновляет доступность комнаты и связывает студента с комнатой при одобрении заявки"""
@@ -671,7 +670,44 @@ class StudentSelectionDialog(QDialog):
             return self.proxy_model.sourceModel().get_student(source_index.row())
         return None
 
+# Прокси-модель для фильтрации заявок
+class RequestsProxyModel(QSortFilterProxyModel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.filter_text = ""
+        self.status_filter = ""
 
+    def setFilterText(self, text):
+        self.filter_text = text
+        self.invalidateFilter()
+
+    def setStatusFilter(self, status):
+        self.status_filter = status if status != "Все статусы" else ""
+        self.invalidateFilter()
+
+    def filterAcceptsRow(self, source_row, source_parent):
+        source_model = self.sourceModel()
+        
+        # Фильтр по статусу (если задан)
+        if self.status_filter:
+            status_index = source_model.index(source_row, 2, source_parent)  # 2 - колонка статуса
+            status = source_model.data(status_index, Qt.DisplayRole)
+            if status != self.status_filter:
+                return False
+        
+        # Фильтр по тексту (если задан)
+        if self.filter_text.strip():
+            for col in range(source_model.columnCount()):
+                index = source_model.index(source_row, col, source_parent)
+                data = source_model.data(index, Qt.DisplayRole)
+                if data is None:
+                    continue
+                if self.filter_text.lower() in str(data).lower():
+                    return True
+            return False
+        
+        return True
+        
 # Прокси-модель для фильтрации студентов
 class StudentsProxyModel(QSortFilterProxyModel):
     def __init__(self, parent=None):
@@ -1094,6 +1130,26 @@ class RequestsWidget(QWidget):
 
         layout = QVBoxLayout(self)
 
+        # Добавляем фильтры
+        filter_layout = QHBoxLayout()
+        
+        # Фильтр по тексту
+        self.filter_edit = QLineEdit()
+        self.filter_edit.setPlaceholderText("Поиск по ID, типу, студенту или комнате...")
+        self.filter_edit.textChanged.connect(self.apply_filters)
+        filter_layout.addWidget(QLabel("Поиск:"))
+        filter_layout.addWidget(self.filter_edit)
+        
+        # Фильтр по статусу
+        self.status_combo = QComboBox()
+        self.status_combo.addItem("Все статусы")  # Первый элемент - "Все статусы"
+        self.status_combo.addItems(RequestsTableModel.STATUS_VALUES)
+        self.status_combo.currentTextChanged.connect(self.apply_filters)
+        filter_layout.addWidget(QLabel("Статус:"))
+        filter_layout.addWidget(self.status_combo)
+        
+        layout.addLayout(filter_layout)
+
         # Кнопки создания заявок
         create_buttons = QHBoxLayout()
         add_zasel_btn = AnimatedButton("Создать заявку на заселение")
@@ -1104,10 +1160,9 @@ class RequestsWidget(QWidget):
         create_buttons.addWidget(add_vysel_btn)
         create_buttons.addWidget(AnimatedButton("Обновить"))
         create_buttons.itemAt(create_buttons.count()-1).widget().clicked.connect(self.refresh_data)
-
         layout.addLayout(create_buttons)
 
-        # Кнопки обработки заявок (измененные)
+        # Кнопки обработки заявок
         process_buttons = QHBoxLayout()
         self.process_btn = AnimatedButton("В обработку")
         self.process_btn.clicked.connect(lambda: self.process_request("В обработке"))
@@ -1120,10 +1175,12 @@ class RequestsWidget(QWidget):
         process_buttons.addWidget(self.reject_btn)
         layout.addLayout(process_buttons)
 
-        # Таблица заявок
+        # Таблица заявок с прокси-моделью
         self.requests_table = QTableView()
         self.requests_model = RequestsTableModel()
-        self.requests_table.setModel(self.requests_model)
+        self.proxy_model = RequestsProxyModel()
+        self.proxy_model.setSourceModel(self.requests_model)
+        self.requests_table.setModel(self.proxy_model)
         self.requests_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.requests_table.setSelectionBehavior(QTableView.SelectRows)
         layout.addWidget(self.requests_table)
@@ -1138,6 +1195,11 @@ class RequestsWidget(QWidget):
         test_btn = QPushButton("Проверить подключение к БД")
         test_btn.clicked.connect(self.test_db_connection)
         layout.addWidget(test_btn)
+        
+    def apply_filters(self):
+        """Применяет фильтры к прокси-модели"""
+        self.proxy_model.setFilterText(self.filter_edit.text())
+        self.proxy_model.setStatusFilter(self.status_combo.currentText())    
         
     def refresh_data(self):
         """Обновляет данные заявок с сохранением сортировки"""
@@ -1170,10 +1232,13 @@ class RequestsWidget(QWidget):
             QMessageBox.warning(self, "Ошибка", "Выберите заявку для обработки")
             return
 
-        row = selected[0].row()
-        request_id = self.requests_model.index(row, 0).data()
-        request_type = self.requests_model.index(row, 1).data()
-        current_status = self.requests_model.index(row, 2).data()
+        # Получаем индекс из прокси-модели и преобразуем его в индекс исходной модели
+        proxy_index = selected[0]
+        source_index = self.proxy_model.mapToSource(proxy_index)
+        
+        request_id = self.requests_model.index(source_index.row(), 0).data()
+        request_type = self.requests_model.index(source_index.row(), 1).data()
+        current_status = self.requests_model.index(source_index.row(), 2).data()
 
         # Подтверждение действия
         reply = QMessageBox.question(
@@ -1192,8 +1257,8 @@ class RequestsWidget(QWidget):
                         "Успех",
                         f"Статус заявки {request_id} изменен на '{new_status}'",
                     )
-                    # Обновляем таблицу
-                    self.requests_model.layoutChanged.emit()
+                    # Принудительно обновляем фильтр
+                    self.apply_filters()
                 else:
                     QMessageBox.warning(
                         self,
