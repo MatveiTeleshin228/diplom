@@ -429,7 +429,7 @@ class RequestsTableModel(QAbstractTableModel):
         SELECT r.id, r.type, r.status, s.fio, r.room_id 
         FROM requests r
         JOIN students s ON r.student_id = s.id
-        ORDER BY r.id Desc
+        ORDER BY r.id DESC
         """
         result = db.execute_query(query, fetch=True)
         if result:
@@ -446,7 +446,26 @@ class RequestsTableModel(QAbstractTableModel):
                 for row in result
             ]
             self.endResetModel()
-
+                
+    def add_request(self, request_data):
+        query = """
+        INSERT INTO requests (type, status, student_id, room_id) 
+        VALUES (%s, %s, %s, %s) RETURNING id
+        """
+        params = (
+            request_data["type"],
+            request_data["status"],
+            int(request_data["student_id"]),
+            int(request_data["room_id"]) if request_data["room_id"] != "не указана" else None,
+        )
+        result = db.execute_query(query, params, fetch=True)
+        if result:
+            # После добавления сразу обновляем данные с правильной сортировкой
+            self.load_data()
+            # Прокручиваем к верхней позиции (новой заявке)
+            return True
+        return False
+    
     def rowCount(self, parent=QModelIndex()):
         return len(self._requests)
 
@@ -1079,6 +1098,9 @@ class RequestsWidget(QWidget):
         add_vysel_btn.clicked.connect(self.create_vysel_request)
         create_buttons.addWidget(add_zasel_btn)
         create_buttons.addWidget(add_vysel_btn)
+        create_buttons.addWidget(AnimatedButton("Обновить"))
+        create_buttons.itemAt(create_buttons.count()-1).widget().clicked.connect(self.refresh_data)
+
         layout.addLayout(create_buttons)
 
         # Кнопки обработки заявок (измененные)
@@ -1112,6 +1134,12 @@ class RequestsWidget(QWidget):
         test_btn = QPushButton("Проверить подключение к БД")
         test_btn.clicked.connect(self.test_db_connection)
         layout.addWidget(test_btn)
+        
+    def refresh_data(self):
+        """Обновляет данные заявок с сохранением сортировки"""
+        self.requests_model.load_data()
+        # Прокручиваем таблицу вверх после обновления
+        self.requests_table.scrollToTop()
 
     def update_buttons_state(self):
         """Обновляет состояние кнопок в зависимости от выбора и текущего статуса"""
@@ -1313,7 +1341,7 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(APP_QSS)
         # Связываем обновление студентов при изменении заявок
         self.requests_tab.requests_model.dataChanged.connect(self._update_students_view)
-        
+
     def _update_students_view(self):
         """Обновляет вид студентов при изменении заявок"""
         self.students_tab.students_model.load_data()
