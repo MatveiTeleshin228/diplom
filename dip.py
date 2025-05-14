@@ -441,7 +441,7 @@ class RequestsTableModel(QAbstractTableModel):
             self.beginResetModel()
             self._requests = [
                 {
-                    "id": str(row[0]),
+                    "id": row[0],  # Оставляем как число, а не str(row[0])
                     "type": row[1],
                     "status": row[2],
                     "student_fio": row[3],
@@ -481,6 +481,14 @@ class RequestsTableModel(QAbstractTableModel):
             return None
         request = self._requests[index.row()]
         if role == Qt.DisplayRole:
+            return [
+                str(request["id"]),  # Преобразуем в строку только при отображении
+                request["type"],
+                request["status"],
+                request["student_fio"],
+                request["room_id"],
+            ][index.column()]
+        elif role == Qt.UserRole:  # Для сортировки используем числовое значение
             return [
                 request["id"],
                 request["type"],
@@ -624,6 +632,11 @@ class RequestsTableModel(QAbstractTableModel):
                             parent.students_tab.students_model.load_data()
                 break
 
+class RequestsProxyModel(QSortFilterProxyModel):
+    def lessThan(self, left, right):
+        if left.column() == 0:  # Для столбца ID
+            return left.data(Qt.UserRole) < right.data(Qt.UserRole)
+        return super().lessThan(left, right)
 
 # Заменяем класс StudentSelectionDialog на следующий:
 class StudentSelectionDialog(QDialog):
@@ -1147,7 +1160,7 @@ class RequestsWidget(QWidget):
         self.requests_model = RequestsTableModel()
         
         # Прокси-модель для фильтрации и сортировки
-        self.proxy_model = QSortFilterProxyModel()
+        self.proxy_model = RequestsProxyModel()
         self.proxy_model.setSourceModel(self.requests_model)
         self.proxy_model.setFilterCaseSensitivity(Qt.CaseInsensitive)
         self.proxy_model.setFilterKeyColumn(-1)  # Поиск по всем столбцам
