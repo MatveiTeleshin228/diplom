@@ -904,11 +904,11 @@ class VyselRequestDialog(QDialog):
         # Получаем текущую комнату студента
         query = "SELECT room_id FROM students WHERE id = %s"
         result = db.execute_query(
-            query, (int(self.selected_student["id"])), fetch=True
+            query, (int(self.selected_student["id"]),), fetch=True
         )
         if not result or not result[0] or not result[0][0][0]:
             QMessageBox.warning(self, "Ошибка", "Студент не заселен в комнату")
-            return None
+            return None  # Просто возвращаем None без вылета
 
         room_id = result[0][0][0]
         return {
@@ -918,7 +918,6 @@ class VyselRequestDialog(QDialog):
             "student_fio": self.selected_student["fio"],
             "room_id": room_id,
         }
-
 
 # Виджет для отображения списка студентов
 class StudentsWidget(QWidget):
@@ -1194,15 +1193,15 @@ class RequestsWidget(QWidget):
         dialog = VyselRequestDialog(self.student_model, self.room_model, self)
         if dialog.exec() == QDialog.Accepted:
             request = dialog.get_request_data()
-            if self.requests_model.add_request(request):
-                QMessageBox.information(
-                    self, "Выселение", "Заявка на выселение создана."
-                )
-            else:
-                QMessageBox.warning(
-                    self, "Ошибка", "Не удалось создать заявку на выселение."
-                )
-
+            if request:  # Проверяем, что request не None
+                if self.requests_model.add_request(request):
+                    QMessageBox.information(
+                        self, "Выселение", "Заявка на выселение создана."
+                    )
+                else:
+                    QMessageBox.warning(
+                        self, "Ошибка", "Не удалось создать заявку на выселение."
+                    )
 
 # Асинхронное задание для генерации отчёта
 class WorkerSignals(QObject):

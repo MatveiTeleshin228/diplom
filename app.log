@@ -301,3 +301,6 @@ Traceback (most recent call last):
     request_data["type"],
     ~~~~~~~~~~~~^^^^^^^^
 TypeError: 'NoneType' object is not subscriptable
+2025-05-14 22:30:32,663 INFO: Успешное подключение к базе данных
+2025-05-14 22:31:17,275 INFO: Добавлена заявка: {'type': 'Заселение', 'status': 'Создана', 'student_id': '10', 'student_fio': 'Ппррп', 'room_id': '102', 'id': '24'}
+2025-05-14 22:32:03,399 INFO: Соединение с базой данных закрыто
