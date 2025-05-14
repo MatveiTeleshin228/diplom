@@ -5,18 +5,42 @@ import time
 import psycopg2
 from psycopg2 import sql
 from PySide6.QtCore import (
-    Qt, QAbstractTableModel, QModelIndex, QThreadPool, QRunnable,
-    QObject, Signal, QPropertyAnimation, QEasingCurve, 
-    QRegularExpression, QSortFilterProxyModel
+    Qt,
+    QAbstractTableModel,
+    QModelIndex,
+    QThreadPool,
+    QRunnable,
+    QObject,
+    Signal,
+    QPropertyAnimation,
+    QEasingCurve,
+    QRegularExpression,
+    QSortFilterProxyModel,
 )
 from PySide6.QtGui import QFont, QAction, QRegularExpressionValidator
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QTableView, QPushButton, QLineEdit, QLabel, QMessageBox,
-    QDialog, QFormLayout, QComboBox, QTabWidget, QProgressDialog,
-    QHeaderView, QGraphicsOpacityEffect, QSpinBox, QSizePolicy,
-    QPlainTextEdit
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QTableView,
+    QPushButton,
+    QLineEdit,
+    QLabel,
+    QMessageBox,
+    QDialog,
+    QFormLayout,
+    QComboBox,
+    QTabWidget,
+    QProgressDialog,
+    QHeaderView,
+    QGraphicsOpacityEffect,
+    QSpinBox,
+    QSizePolicy,
+    QPlainTextEdit,
 )
+from PySide6.QtWidgets import QDialogButtonBox
 
 # Настройка логирования
 logging.basicConfig(
@@ -26,14 +50,16 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s: %(message)s",
 )
 
+
 def exception_hook(exc_type, exc_value, exc_traceback):
     logging.error(
-        "Неперехваченное исключение", 
-        exc_info=(exc_type, exc_value, exc_traceback)
+        "Неперехваченное исключение", exc_info=(exc_type, exc_value, exc_traceback)
     )
     sys.exit(1)
 
+
 sys.excepthook = exception_hook
+
 
 class Database:
     def __init__(self):
@@ -43,12 +69,12 @@ class Database:
     def connect(self):
         try:
             self.connection = psycopg2.connect(
-                dbname='postgres',
-                user='postgres.okwxukyvivltgexgjlaf',
-                password='pqiBU3JavEhOxm6E',
-                host='aws-0-eu-north-1.pooler.supabase.com',
-                port='6543',
-                connect_timeout=5
+                dbname="postgres",
+                user="postgres.okwxukyvivltgexgjlaf",
+                password="pqiBU3JavEhOxm6E",
+                host="aws-0-eu-north-1.pooler.supabase.com",
+                port="6543",
+                connect_timeout=5,
             )
             self.connection.autocommit = False
             logging.info("Успешное подключение к базе данных")
@@ -60,19 +86,23 @@ class Database:
         try:
             if not self.connection or self.connection.closed:
                 self.connect()
-                
+
             with self.connection.cursor() as cursor:
                 cursor.execute(query, params)
-                
+
                 if fetch:
                     result = cursor.fetchall()
-                    columns = [desc[0] for desc in cursor.description] if cursor.description else []
+                    columns = (
+                        [desc[0] for desc in cursor.description]
+                        if cursor.description
+                        else []
+                    )
                     self.connection.commit()
                     return result, columns
                 else:
                     self.connection.commit()
                     return True
-                    
+
         except Exception as e:
             if self.connection:
                 self.connection.rollback()
@@ -83,6 +113,7 @@ class Database:
         if self.connection:
             self.connection.close()
             logging.info("Соединение с базой данных закрыто")
+
 
 db = Database()
 
@@ -321,7 +352,7 @@ class StudentsTableModel(QAbstractTableModel):
 # Модель для списка комнат
 class RoomsTableModel(QAbstractTableModel):
     HEADERS = ["ID", "Этаж", "Кол-во мест", "Свободно"]
-    
+
     def __init__(self):
         super().__init__()
         self._rooms = []
@@ -376,31 +407,34 @@ class RoomsTableModel(QAbstractTableModel):
 # Модель для заявок
 class RequestsTableModel(QAbstractTableModel):
     HEADERS = ["ID", "Тип заявки", "Статус", "Студент", "Комната"]
-    STATUS_VALUES = ['Создана', 'В обработке', 'Выполнена', 'Отклонена']  # Измененные статусы
+    STATUS_VALUES = ['Создана', 'В обработке', 'Выполнена', 'Отклонена']
 
     def __init__(self):
         super().__init__()
         self._requests = []
         self.load_data()
-    
+
     def load_data(self):
         query = """
         SELECT r.id, r.type, r.status, s.fio, r.room_id 
         FROM requests r
         JOIN students s ON r.student_id = s.id
-        ORDER BY r.id
+        ORDER BY r.id Desc
         """
         result = db.execute_query(query, fetch=True)
         if result:
             result, _ = result
             self.beginResetModel()
-            self._requests = [{
-                "id": str(row[0]),
-                "type": row[1],
-                "status": row[2],
-                "student_fio": row[3],
-                "room_id": str(row[4])
-            } for row in result]
+            self._requests = [
+                {
+                    "id": str(row[0]),
+                    "type": row[1],
+                    "status": row[2],
+                    "student_fio": row[3],
+                    "room_id": str(row[4]),
+                }
+                for row in result
+            ]
             self.endResetModel()
 
     def rowCount(self, parent=QModelIndex()):
@@ -464,19 +498,19 @@ class RequestsTableModel(QAbstractTableModel):
             if new_status not in self.STATUS_VALUES:
                 logging.error(f"Попытка установить недопустимый статус: {new_status}")
                 return False
-                
+
             # Проверяем подключение
             if not db.connection or db.connection.closed:
                 db.connect()
-            
+
             # Проверяем существование заявки
             check_query = "SELECT id, type FROM requests WHERE id = %s"
             check_result = db.execute_query(check_query, (request_id,), fetch=True)
-            
+
             if not check_result or not check_result[0]:
                 logging.error(f"Заявка с ID {request_id} не найдена")
                 return False
-            
+
             # Обновляем статус
             update_query = """
             UPDATE requests 
@@ -484,45 +518,47 @@ class RequestsTableModel(QAbstractTableModel):
             WHERE id = %s 
             RETURNING id, status
             """
-            result = db.execute_query(update_query, (new_status, request_id), fetch=True)
-            
+            result = db.execute_query(
+                update_query, (new_status, request_id), fetch=True
+            )
+
             if result and result[0]:
                 # Обновляем модель
                 for i, req in enumerate(self._requests):
                     if req["id"] == str(request_id):
                         self._requests[i]["status"] = new_status
                         self.dataChanged.emit(
-                            self.index(i, 0),
-                            self.index(i, self.columnCount() - 1)
+                            self.index(i, 0), self.index(i, self.columnCount() - 1)
                         )
                         break
-                
+
                 # Обновляем комнату и связь студента если заявка Выполнена
                 if new_status == "Выполнена":
                     self._update_room_availability(request_id)
-                
+
                 return True
             return False
-            
+
         except Exception as e:
             logging.error(f"Ошибка при обновлении статуса заявки: {e}")
             return False
-            
+
+
     def _update_room_availability(self, request_id):
         """Обновляет доступность комнаты и связывает студента с комнатой при одобрении заявки"""
         for req in self._requests:
             if req["id"] == str(request_id):
                 room_id = req["room_id"]
                 student_id = None
-                
+
                 # Находим student_id для этой заявки
                 query = "SELECT student_id FROM requests WHERE id = %s"
                 result = db.execute_query(query, (request_id,), fetch=True)
                 if result and result[0]:
                     student_id = result[0][0][0]
-                
+
                 change = 0  # Изменение количества свободных мест
-                
+
                 if req["type"] == "Заселение" and req["status"] == "Выполнена":
                     change = -1
                     # Обновляем room_id студента
@@ -531,25 +567,76 @@ class RequestsTableModel(QAbstractTableModel):
                         db.execute_query(query, (room_id, student_id))
                 elif req["type"] == "Выселение" and req["status"] == "Выполнена":
                     change = 1
-                    # Удаляем связь студента с комнатой (устанавливаем room_id в NULL)
-                    if student_id:
+                    # Получаем текущую комнату студента
+                    query = "SELECT room_id FROM students WHERE id = %s"
+                    result = db.execute_query(query, (student_id,), fetch=True)
+                    if result and result[0] and result[0][0][0]:
+                        room_id = result[0][0][0]  # Используем текущую комнату студента
+                        # Удаляем связь студента с комнатой (устанавливаем room_id в NULL)
                         query = "UPDATE students SET room_id = NULL WHERE id = %s"
                         db.execute_query(query, (student_id,))
-                
+
                 # Обновляем количество свободных мест в комнате
                 if change != 0:
                     query = "UPDATE rooms SET svobodno = svobodno + %s WHERE id = %s"
                     if db.execute_query(query, (change, room_id)):
                         # Находим модель комнат через родительские виджеты
                         parent = self.parent()
-                        while parent and not hasattr(parent, 'rooms_tab'):
+                        while parent and not hasattr(parent, "rooms_tab"):
                             parent = parent.parent()
-                        
-                        if parent and hasattr(parent, 'rooms_tab'):
+
+                        if parent and hasattr(parent, "rooms_tab"):
                             # Вызываем обновление модели комнат
                             parent.rooms_tab.rooms_model.load_data()
                 break
-                        
+
+
+# Заменяем класс StudentSelectionDialog на следующий:
+class StudentSelectionDialog(QDialog):
+    def __init__(self, student_model, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Выбор студента")
+        self.setMinimumSize(600, 400)
+
+        layout = QVBoxLayout(self)
+
+        # Поле поиска
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText("Поиск по ФИО или ID...")
+        self.search_edit.textChanged.connect(self.filter_students)
+        layout.addWidget(self.search_edit)
+
+        # Таблица студентов
+        self.table = QTableView()
+
+        # Прокси-модель для фильтрации
+        self.proxy_model = (
+            StudentsProxyModel()
+        )  # Используем уже существующий класс StudentsProxyModel
+        self.proxy_model.setSourceModel(student_model)
+
+        self.table.setModel(self.proxy_model)
+        self.table.setSelectionBehavior(QTableView.SelectRows)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        layout.addWidget(self.table)
+
+        # Кнопки
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def filter_students(self, text):
+        self.proxy_model.setFilterText(text)
+
+    def get_selected_student(self):
+        selection = self.table.selectionModel().selectedRows()
+        if selection:
+            proxy_index = selection[0]
+            source_index = self.proxy_model.mapToSource(proxy_index)
+            return self.proxy_model.sourceModel().get_student(source_index.row())
+        return None
+
 
 # Прокси-модель для фильтрации студентов
 class StudentsProxyModel(QSortFilterProxyModel):
@@ -698,11 +785,13 @@ class ZaselRequestDialog(QDialog):
         self.room_model = room_model
         layout = QFormLayout(self)
 
-        self.student_combo = QComboBox(self)
-        for i in range(student_model.rowCount()):
-            student = student_model.get_student(i)
-            display = f"{student.get('id')} - {student.get('fio')}"
-            self.student_combo.addItem(display, student)
+        # Кнопка выбора студента
+        self.select_student_btn = QPushButton("Выбрать студента...")
+        self.select_student_btn.clicked.connect(self.select_student)
+        self.selected_student = None
+        self.student_label = QLabel("Не выбран")
+        layout.addRow("Студент:", self.select_student_btn)
+        layout.addRow("Выбран:", self.student_label)
 
         self.room_combo = QComboBox(self)
         for i in range(room_model.rowCount()):
@@ -714,7 +803,6 @@ class ZaselRequestDialog(QDialog):
             except Exception:
                 continue
 
-        layout.addRow("Студент:", self.student_combo)
         layout.addRow("Комната:", self.room_combo)
 
         button_layout = QHBoxLayout()
@@ -726,14 +814,25 @@ class ZaselRequestDialog(QDialog):
         button_layout.addWidget(cancel_button)
         layout.addRow(button_layout)
 
+    def select_student(self):
+        dialog = StudentSelectionDialog(self.student_model, self)
+        if dialog.exec() == QDialog.Accepted:
+            self.selected_student = dialog.get_selected_student()
+            if self.selected_student:
+                self.student_label.setText(
+                    f"{self.selected_student['id']} - {self.selected_student['fio']}"
+                )
+
     def get_request_data(self):
-        student = self.student_combo.currentData()
+        if not self.selected_student:
+            return None
+
         room = self.room_combo.currentData()
         return {
             "type": "Заселение",
             "status": "Создана",
-            "student_id": student["id"],
-            "student_fio": student["fio"],
+            "student_id": self.selected_student["id"],
+            "student_fio": self.selected_student["fio"],
             "room_id": room["id"],
         }
 
@@ -747,20 +846,17 @@ class VyselRequestDialog(QDialog):
         self.room_model = room_model
         layout = QFormLayout(self)
 
-        self.student_combo = QComboBox(self)
-        for i in range(student_model.rowCount()):
-            student = student_model.get_student(i)
-            display = f"{student.get('id')} - {student.get('fio')}"
-            self.student_combo.addItem(display, student)
+        # Кнопка выбора студента
+        self.select_student_btn = QPushButton("Выбрать студента...")
+        self.select_student_btn.clicked.connect(self.select_student)
+        self.selected_student = None
+        self.student_label = QLabel("Не выбран")
+        layout.addRow("Студент:", self.select_student_btn)
+        layout.addRow("Выбран:", self.student_label)
 
-        self.room_combo = QComboBox(self)
-        for i in range(room_model.rowCount()):
-            room = room_model._rooms[i]
-            display = f"{room.get('id')} - Этаж: {room.get('etazh')}, Мест: {room.get('kol_mest')}, Свободно: {room.get('svobodno')}"
-            self.room_combo.addItem(display, room)
-
-        layout.addRow("Студент:", self.student_combo)
-        layout.addRow("Комната:", self.room_combo)
+        # Комната будет определяться автоматически из данных студента
+        self.room_label = QLabel("Будет определена автоматически")
+        layout.addRow("Комната:", self.room_label)
 
         button_layout = QHBoxLayout()
         ok_button = AnimatedButton("ОК")
@@ -771,15 +867,45 @@ class VyselRequestDialog(QDialog):
         button_layout.addWidget(cancel_button)
         layout.addRow(button_layout)
 
+    def select_student(self):
+        dialog = StudentSelectionDialog(self.student_model, self)
+        if dialog.exec() == QDialog.Accepted:
+            self.selected_student = dialog.get_selected_student()
+            if self.selected_student:
+                self.student_label.setText(
+                    f"{self.selected_student['id']} - {self.selected_student['fio']}"
+                )
+                # Получаем текущую комнату студента
+                query = "SELECT room_id FROM students WHERE id = %s"
+                result = db.execute_query(
+                    query, (int(self.selected_student["id"]),), fetch=True
+                )
+                if result and result[0] and result[0][0][0]:
+                    room_id = result[0][0][0]
+                    self.room_label.setText(str(room_id))
+                else:
+                    self.room_label.setText("Студент не заселен")
+
     def get_request_data(self):
-        student = self.student_combo.currentData()
-        room = self.room_combo.currentData()
+        if not self.selected_student:
+            return None
+
+        # Получаем текущую комнату студента
+        query = "SELECT room_id FROM students WHERE id = %s"
+        result = db.execute_query(
+            query, (int(self.selected_student["id"]),), fetch=True
+        )
+        if not result or not result[0] or not result[0][0][0]:
+            QMessageBox.warning(self, "Ошибка", "Студент не заселен в комнату")
+            return None
+
+        room_id = result[0][0][0]
         return {
             "type": "Выселение",
             "status": "Создана",
-            "student_id": student["id"],
-            "student_fio": student["fio"],
-            "room_id": room["id"],
+            "student_id": self.selected_student["id"],
+            "student_fio": self.selected_student["fio"],
+            "room_id": room_id,
         }
 
 
@@ -889,12 +1015,12 @@ class RoomsWidget(QWidget):
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
-        
+
         # Кнопка обновления
         self.refresh_button = AnimatedButton("Обновить данные")
         self.refresh_button.clicked.connect(self.refresh_data)
         layout.addWidget(self.refresh_button)
-        
+
         # Таблица
         self.table = QTableView()
         self.rooms_model = RoomsTableModel()
@@ -903,7 +1029,7 @@ class RoomsWidget(QWidget):
         self.table.setSelectionBehavior(QTableView.SelectRows)
         self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.table)
-    
+
     def refresh_data(self):
         """Обновляет данные в таблице комнат"""
         self.rooms_model.load_data()
@@ -916,9 +1042,9 @@ class RequestsWidget(QWidget):
         super().__init__()
         self.student_model = student_model
         self.room_model = room_model
-        
+
         layout = QVBoxLayout(self)
-        
+
         # Кнопки создания заявок
         create_buttons = QHBoxLayout()
         add_zasel_btn = AnimatedButton("Создать заявку на заселение")
@@ -928,20 +1054,20 @@ class RequestsWidget(QWidget):
         create_buttons.addWidget(add_zasel_btn)
         create_buttons.addWidget(add_vysel_btn)
         layout.addLayout(create_buttons)
-        
+
         # Кнопки обработки заявок (измененные)
         process_buttons = QHBoxLayout()
         self.process_btn = AnimatedButton("В обработку")
-        self.process_btn.clicked.connect(lambda: self.process_request('В обработке'))
+        self.process_btn.clicked.connect(lambda: self.process_request("В обработке"))
         self.approve_btn = AnimatedButton("Одобрить")
-        self.approve_btn.clicked.connect(lambda: self.process_request('Выполнена'))
+        self.approve_btn.clicked.connect(lambda: self.process_request("Выполнена"))
         self.reject_btn = AnimatedButton("Отклонить")
-        self.reject_btn.clicked.connect(lambda: self.process_request('Отклонена'))
+        self.reject_btn.clicked.connect(lambda: self.process_request("Отклонена"))
         process_buttons.addWidget(self.process_btn)
         process_buttons.addWidget(self.approve_btn)
         process_buttons.addWidget(self.reject_btn)
         layout.addLayout(process_buttons)
-        
+
         # Таблица заявок
         self.requests_table = QTableView()
         self.requests_model = RequestsTableModel()
@@ -949,11 +1075,13 @@ class RequestsWidget(QWidget):
         self.requests_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.requests_table.setSelectionBehavior(QTableView.SelectRows)
         layout.addWidget(self.requests_table)
-        
+
         # Обновляем кнопки при выборе заявки
-        self.requests_table.selectionModel().selectionChanged.connect(self.update_buttons_state)
+        self.requests_table.selectionModel().selectionChanged.connect(
+            self.update_buttons_state
+        )
         self.update_buttons_state()
-        
+
         # Кнопка теста подключения (остается без изменений)
         test_btn = QPushButton("Проверить подключение к БД")
         test_btn.clicked.connect(self.test_db_connection)
@@ -963,15 +1091,15 @@ class RequestsWidget(QWidget):
         """Обновляет состояние кнопок в зависимости от выбора и текущего статуса"""
         selected = self.requests_table.selectionModel().selectedRows()
         has_selection = bool(selected)
-        
+
         if has_selection:
             row = selected[0].row()
             status = self.requests_model.index(row, 2).data()
-            
+
             # Настройка доступности кнопок в зависимости от текущего статуса
-            self.process_btn.setEnabled(status == 'Создана')
-            self.approve_btn.setEnabled(status in ['Создана', 'В обработке'])
-            self.reject_btn.setEnabled(status in ['Создана', 'В обработке'])
+            self.process_btn.setEnabled(status == "Создана")
+            self.approve_btn.setEnabled(status in ["Создана", "В обработке"])
+            self.reject_btn.setEnabled(status in ["Создана", "В обработке"])
         else:
             self.process_btn.setEnabled(False)
             self.approve_btn.setEnabled(False)
@@ -983,28 +1111,28 @@ class RequestsWidget(QWidget):
         if not selected:
             QMessageBox.warning(self, "Ошибка", "Выберите заявку для обработки")
             return
-            
+
         row = selected[0].row()
         request_id = self.requests_model.index(row, 0).data()
         request_type = self.requests_model.index(row, 1).data()
         current_status = self.requests_model.index(row, 2).data()
-        
+
         # Подтверждение действия
         reply = QMessageBox.question(
             self,
             "Подтверждение",
             f"Вы уверены, что хотите изменить статус заявки {request_id} ({request_type}) с '{current_status}' на '{new_status}'?",
             QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
+            QMessageBox.No,
         )
-        
+
         if reply == QMessageBox.Yes:
             try:
                 if self.requests_model.update_request_status(request_id, new_status):
                     QMessageBox.information(
-                        self, 
-                        "Успех", 
-                        f"Статус заявки {request_id} изменен на '{new_status}'"
+                        self,
+                        "Успех",
+                        f"Статус заявки {request_id} изменен на '{new_status}'",
                     )
                     # Обновляем таблицу
                     self.requests_model.layoutChanged.emit()
@@ -1012,14 +1140,10 @@ class RequestsWidget(QWidget):
                     QMessageBox.warning(
                         self,
                         "Ошибка",
-                        "Не удалось обновить статус заявки. Проверьте логи."
+                        "Не удалось обновить статус заявки. Проверьте логи.",
                     )
             except Exception as e:
-                QMessageBox.critical(
-                    self,
-                    "Ошибка",
-                    f"Произошла ошибка: {str(e)}"
-                )
+                QMessageBox.critical(self, "Ошибка", f"Произошла ошибка: {str(e)}")
 
     def test_db_connection(self):
         """Тестирование подключения к базе данных"""
@@ -1027,23 +1151,21 @@ class RequestsWidget(QWidget):
             result = db.execute_query("SELECT 1", fetch=True)
             if result:
                 QMessageBox.information(
-                    self, 
-                    "Проверка подключения", 
-                    "Подключение к базе данных работает нормально"
+                    self,
+                    "Проверка подключения",
+                    "Подключение к базе данных работает нормально",
                 )
             else:
                 QMessageBox.warning(
-                    self,
-                    "Проверка подключения",
-                    "Не удалось выполнить тестовый запрос"
+                    self, "Проверка подключения", "Не удалось выполнить тестовый запрос"
                 )
         except Exception as e:
             QMessageBox.critical(
                 self,
                 "Ошибка подключения",
-                f"Ошибка при подключении к базе данных: {str(e)}"
+                f"Ошибка при подключении к базе данных: {str(e)}",
             )
-            
+
     def create_zasel_request(self):
         dialog = ZaselRequestDialog(self.student_model, self.room_model, self)
         if dialog.exec() == QDialog.Accepted:
