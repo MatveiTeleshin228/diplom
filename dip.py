@@ -590,14 +590,15 @@ class RequestsTableModel(QAbstractTableModel):
                 if change != 0:
                     query = "UPDATE rooms SET svobodno = svobodno + %s WHERE id = %s"
                     if db.execute_query(query, (change, room_id)):
-                        # Находим модель комнат через родительские виджеты
+                        # Находим родительские виджеты для обновления
                         parent = self.parent()
                         while parent and not hasattr(parent, "rooms_tab"):
                             parent = parent.parent()
 
                         if parent and hasattr(parent, "rooms_tab"):
-                            # Вызываем обновление модели комнат
+                            # Обновляем модели комнат и студентов
                             parent.rooms_tab.rooms_model.load_data()
+                            parent.students_tab.students_model.load_data()
                 break
 
 
@@ -934,6 +935,17 @@ class StudentsWidget(QWidget):
         filter_layout.addWidget(self.filter_line_edit, 1)
         layout.addLayout(filter_layout)
 
+        # Добавляем кнопку обновления в верхней части
+        refresh_layout = QHBoxLayout()
+        self.refresh_button = AnimatedButton("Обновить")
+        self.refresh_button.clicked.connect(self.refresh_data)
+        refresh_layout.addWidget(self.refresh_button)
+        refresh_layout.addStretch()
+        layout.addLayout(refresh_layout)
+
+        filter_layout = QHBoxLayout()
+
+
         self.students_model = StudentsTableModel()
         self.proxy_model = StudentsProxyModel()
         self.proxy_model.setSourceModel(self.students_model)
@@ -960,6 +972,10 @@ class StudentsWidget(QWidget):
         self.proxy_model.setFilterText(text)
         logging.info("Применён фильтр: %s", text)
 
+    def refresh_data(self):
+        """Обновляет данные студентов"""
+        self.students_model.load_data()
+    
     def add_student(self):
         dialog = AddEditStudentDialog(self)
         if dialog.exec() == QDialog.Accepted:
@@ -1295,6 +1311,12 @@ class MainWindow(QMainWindow):
         self._create_tabs()
         self._create_menu()
         self.setStyleSheet(APP_QSS)
+        # Связываем обновление студентов при изменении заявок
+        self.requests_tab.requests_model.dataChanged.connect(self._update_students_view)
+        
+    def _update_students_view(self):
+        """Обновляет вид студентов при изменении заявок"""
+        self.students_tab.students_model.load_data()
 
     def _create_tabs(self):
         self.tabs = QTabWidget()
