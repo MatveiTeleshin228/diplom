@@ -321,7 +321,7 @@ class StudentsTableModel(QAbstractTableModel):
 # Модель для списка комнат
 class RoomsTableModel(QAbstractTableModel):
     HEADERS = ["ID", "Этаж", "Кол-во мест", "Свободно"]
-
+    
     def __init__(self):
         super().__init__()
         self._rooms = []
@@ -365,9 +365,10 @@ class RoomsTableModel(QAbstractTableModel):
         return None
 
     def update_room_availability(self, room_id, change):
+        """Обновляет количество свободных мест в комнате"""
         query = "UPDATE rooms SET svobodno = svobodno + %s WHERE id = %s"
         if db.execute_query(query, (change, room_id)):
-            self.load_data()
+            self.load_data()  # Полностью перезагружаем данные
             return True
         return False
 
@@ -506,7 +507,7 @@ class RequestsTableModel(QAbstractTableModel):
         except Exception as e:
             logging.error(f"Ошибка при обновлении статуса заявки: {e}")
             return False
-    
+            
     def _update_room_availability(self, request_id):
         """Обновляет доступность комнаты и связывает студента с комнатой при одобрении заявки"""
         for req in self._requests:
@@ -519,6 +520,8 @@ class RequestsTableModel(QAbstractTableModel):
                 result = db.execute_query(query, (request_id,), fetch=True)
                 if result and result[0]:
                     student_id = result[0][0][0]
+                
+                change = 0  # Изменение количества свободных мест
                 
                 if req["type"] == "Заселение" and req["status"] == "Выполнена":
                     change = -1
@@ -533,14 +536,20 @@ class RequestsTableModel(QAbstractTableModel):
                         query = "UPDATE students SET room_id = NULL WHERE id = %s"
                         db.execute_query(query, (student_id,))
                 
-                # Находим модель комнат через родительские виджеты
-                parent = self.parent()
-                while parent and not hasattr(parent, 'rooms_tab'):
-                    parent = parent.parent()
-                
-                if parent and hasattr(parent, 'rooms_tab'):
-                    parent.rooms_tab.rooms_model.update_room_availability(room_id, change)
+                # Обновляем количество свободных мест в комнате
+                if change != 0:
+                    query = "UPDATE rooms SET svobodno = svobodno + %s WHERE id = %s"
+                    if db.execute_query(query, (change, room_id)):
+                        # Находим модель комнат через родительские виджеты
+                        parent = self.parent()
+                        while parent and not hasattr(parent, 'rooms_tab'):
+                            parent = parent.parent()
+                        
+                        if parent and hasattr(parent, 'rooms_tab'):
+                            # Вызываем обновление модели комнат
+                            parent.rooms_tab.rooms_model.load_data()
                 break
+                        
 
 # Прокси-модель для фильтрации студентов
 class StudentsProxyModel(QSortFilterProxyModel):
@@ -880,6 +889,13 @@ class RoomsWidget(QWidget):
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
+        
+        # Кнопка обновления
+        self.refresh_button = AnimatedButton("Обновить данные")
+        self.refresh_button.clicked.connect(self.refresh_data)
+        layout.addWidget(self.refresh_button)
+        
+        # Таблица
         self.table = QTableView()
         self.rooms_model = RoomsTableModel()
         self.table.setModel(self.rooms_model)
@@ -887,6 +903,11 @@ class RoomsWidget(QWidget):
         self.table.setSelectionBehavior(QTableView.SelectRows)
         self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.table)
+    
+    def refresh_data(self):
+        """Обновляет данные в таблице комнат"""
+        self.rooms_model.load_data()
+        QMessageBox.information(self, "Обновление", "Данные о комнатах обновлены.")
 
 
 # Виджет для работы с заявками
@@ -1023,59 +1044,11 @@ class RequestsWidget(QWidget):
                 f"Ошибка при подключении к базе данных: {str(e)}"
             )
             
-    def approve_request(self):
-        self._process_request("Выполнена")
-    
-    def reject_request(self):
-        self._process_request("Отклонена")
-    
-    def _process_request(self, new_status):
-        selected = self.requests_table.selectionModel().selectedRows()
-        if not selected:
-            return
-            
-        proxy_index = selected[0]
-        source_index = self.requests_model.index(proxy_index.row(), 0)  # Колонка ID
-        request_id = self.requests_model.data(source_index, Qt.DisplayRole)
-        
-        if self.requests_model.update_request_status(request_id, new_status):
-            QMessageBox.information(self, "Успех", f"Заявка {request_id} {new_status.lower()}!")
-        else:
-            QMessageBox.warning(self, "Ошибка", "Не удалось обновить статус заявки")
-    
-    def view_request_details(self):
-        selected = self.requests_table.selectionModel().selectedRows()
-        if not selected:
-            return
-            
-        proxy_index = selected[0]
-        row = proxy_index.row()
-        
-        request_id = self.requests_model.index(row, 0).data()
-        request_type = self.requests_model.index(row, 1).data()
-        status = self.requests_model.index(row, 2).data()
-        student_fio = self.requests_model.index(row, 3).data()
-        room_id = self.requests_model.index(row, 4).data()
-        
-        details = (
-            f"ID заявки: {request_id}\n"
-            f"Тип: {request_type}\n"
-            f"Статус: {status}\n"
-            f"Студент: {student_fio}\n"
-            f"Комната: {room_id}"
-        )
-        
-        QMessageBox.information(self, "Детали заявки", details)
-    
-    # ... остальные существующие методы ...
     def create_zasel_request(self):
         dialog = ZaselRequestDialog(self.student_model, self.room_model, self)
         if dialog.exec() == QDialog.Accepted:
             request = dialog.get_request_data()
             if self.requests_model.add_request(request):
-                # Обновляем количество свободных мест в комнате
-                room_id = request["room_id"]
-                self.room_model.update_room_availability(room_id, -1)
                 QMessageBox.information(
                     self, "Заселение", "Заявка на заселение создана."
                 )
@@ -1089,9 +1062,6 @@ class RequestsWidget(QWidget):
         if dialog.exec() == QDialog.Accepted:
             request = dialog.get_request_data()
             if self.requests_model.add_request(request):
-                # Обновляем количество свободных мест в комнате
-                room_id = request["room_id"]
-                self.room_model.update_room_availability(room_id, 1)
                 QMessageBox.information(
                     self, "Выселение", "Заявка на выселение создана."
                 )
@@ -1100,49 +1070,7 @@ class RequestsWidget(QWidget):
                     self, "Ошибка", "Не удалось создать заявку на выселение."
                 )
 
-    def _process_request(self, new_status):
-        selected = self.requests_table.selectionModel().selectedRows()
-        if not selected:
-            QMessageBox.warning(self, "Ошибка", "Выберите заявку для обработки")
-            return
-            
-        proxy_index = selected[0]
-        row = proxy_index.row()
-        request_id = self.requests_model.index(row, 0).data()
-        
-        # Получаем тип заявки для понятного сообщения
-        request_type = self.requests_model.index(row, 1).data()
-        current_status = self.requests_model.index(row, 2).data()
-        
-        # Проверяем, не обработана ли уже заявка
-        if current_status in ["Выполнена", "Отклонена"]:
-            QMessageBox.warning(self, "Ошибка", "Эта заявка уже обработана")
-            return
-        
-        reply = QMessageBox.question(
-            self,
-            "Подтверждение",
-            f"Вы уверены, что хотите {new_status.lower()} заявку {request_id} ({request_type})?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No  # По умолчанию выбрано "Нет" для безопасности
-        )
-        
-        if reply == QMessageBox.Yes:
-            if self.requests_model.update_request_status(request_id, new_status):
-                QMessageBox.information(
-                    self, 
-                    "Успех", 
-                    f"Статус заявки {request_id} изменён на '{new_status}'"
-                )
-                # Обновляем таблицу
-                self.requests_model.layoutChanged.emit()
-            else:
-                QMessageBox.warning(
-                    self, 
-                    "Ошибка", 
-                    "Не удалось обновить статус заявки. Проверьте подключение к БД."
-                )
-                
+
 # Асинхронное задание для генерации отчёта
 class WorkerSignals(QObject):
     progress = Signal(int)
