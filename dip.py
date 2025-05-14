@@ -375,6 +375,7 @@ class RoomsTableModel(QAbstractTableModel):
 # Модель для заявок
 class RequestsTableModel(QAbstractTableModel):
     HEADERS = ["ID", "Тип заявки", "Статус", "Студент", "Комната"]
+    STATUS_VALUES = ['Создана', 'В обработке', 'Выполнена', 'Отклонена']  # Измененные статусы
 
     def __init__(self):
         super().__init__()
@@ -458,12 +459,17 @@ class RequestsTableModel(QAbstractTableModel):
     def update_request_status(self, request_id, new_status):
         """Обновление статуса заявки с проверкой подключения и транзакцией"""
         try:
+            # Проверяем, что новый статус допустим
+            if new_status not in self.STATUS_VALUES:
+                logging.error(f"Попытка установить недопустимый статус: {new_status}")
+                return False
+                
             # Проверяем подключение
             if not db.connection or db.connection.closed:
                 db.connect()
             
             # Проверяем существование заявки
-            check_query = "SELECT id FROM requests WHERE id = %s"
+            check_query = "SELECT id, type FROM requests WHERE id = %s"
             check_result = db.execute_query(check_query, (request_id,), fetch=True)
             
             if not check_result or not check_result[0]:
@@ -490,8 +496,8 @@ class RequestsTableModel(QAbstractTableModel):
                         )
                         break
                 
-                # Обновляем комнату если заявка одобрена
-                if new_status == "Одобрена":
+                # Обновляем комнату и связь студента если заявка Выполнена
+                if new_status == "Выполнена":
                     self._update_room_availability(request_id)
                 
                 return True
@@ -500,13 +506,32 @@ class RequestsTableModel(QAbstractTableModel):
         except Exception as e:
             logging.error(f"Ошибка при обновлении статуса заявки: {e}")
             return False
-
+    
     def _update_room_availability(self, request_id):
-        """Обновляет доступность комнаты после одобрения заявки"""
+        """Обновляет доступность комнаты и связывает студента с комнатой при одобрении заявки"""
         for req in self._requests:
             if req["id"] == str(request_id):
                 room_id = req["room_id"]
-                change = -1 if req["type"] == "Заселение" else 1
+                student_id = None
+                
+                # Находим student_id для этой заявки
+                query = "SELECT student_id FROM requests WHERE id = %s"
+                result = db.execute_query(query, (request_id,), fetch=True)
+                if result and result[0]:
+                    student_id = result[0][0][0]
+                
+                if req["type"] == "Заселение" and req["status"] == "Выполнена":
+                    change = -1
+                    # Обновляем room_id студента
+                    if student_id:
+                        query = "UPDATE students SET room_id = %s WHERE id = %s"
+                        db.execute_query(query, (room_id, student_id))
+                elif req["type"] == "Выселение" and req["status"] == "Выполнена":
+                    change = 1
+                    # Удаляем связь студента с комнатой (устанавливаем room_id в NULL)
+                    if student_id:
+                        query = "UPDATE students SET room_id = NULL WHERE id = %s"
+                        db.execute_query(query, (student_id,))
                 
                 # Находим модель комнат через родительские виджеты
                 parent = self.parent()
@@ -516,23 +541,6 @@ class RequestsTableModel(QAbstractTableModel):
                 if parent and hasattr(parent, 'rooms_tab'):
                     parent.rooms_tab.rooms_model.update_room_availability(room_id, change)
                 break
-    
-    def _update_room_availability(self, request_id):
-        """Обновляет доступность комнаты после одобрения заявки"""
-        for req in self._requests:
-            if req["id"] == str(request_id):
-                room_id = req["room_id"]
-                change = -1 if req["type"] == "Заселение" else 1
-                
-                # Ищем модель комнат через родительские виджеты
-                parent = self.parent()
-                while parent and not hasattr(parent, 'rooms_tab'):
-                    parent = parent.parent()
-                
-                if parent and hasattr(parent, 'rooms_tab'):
-                    parent.rooms_tab.rooms_model.update_room_availability(room_id, change)
-                break
-
 
 # Прокси-модель для фильтрации студентов
 class StudentsProxyModel(QSortFilterProxyModel):
@@ -900,17 +908,17 @@ class RequestsWidget(QWidget):
         create_buttons.addWidget(add_vysel_btn)
         layout.addLayout(create_buttons)
         
-        # Кнопки обработки заявок
+        # Кнопки обработки заявок (измененные)
         process_buttons = QHBoxLayout()
-        self.approve_btn = AnimatedButton("Одобрить заявку")
-        self.approve_btn.clicked.connect(lambda: self.process_request("Одобрена"))
-        self.reject_btn = AnimatedButton("Отклонить заявку")
-        self.reject_btn.clicked.connect(lambda: self.process_request("Отклонена"))
-        self.view_btn = AnimatedButton("Просмотр деталей")
-        self.view_btn.clicked.connect(self.view_request_details)
+        self.process_btn = AnimatedButton("В обработку")
+        self.process_btn.clicked.connect(lambda: self.process_request('В обработке'))
+        self.approve_btn = AnimatedButton("Одобрить")
+        self.approve_btn.clicked.connect(lambda: self.process_request('Выполнена'))
+        self.reject_btn = AnimatedButton("Отклонить")
+        self.reject_btn.clicked.connect(lambda: self.process_request('Отклонена'))
+        process_buttons.addWidget(self.process_btn)
         process_buttons.addWidget(self.approve_btn)
         process_buttons.addWidget(self.reject_btn)
-        process_buttons.addWidget(self.view_btn)
         layout.addLayout(process_buttons)
         
         # Таблица заявок
@@ -925,31 +933,31 @@ class RequestsWidget(QWidget):
         self.requests_table.selectionModel().selectionChanged.connect(self.update_buttons_state)
         self.update_buttons_state()
         
-        # Кнопка теста подключения
+        # Кнопка теста подключения (остается без изменений)
         test_btn = QPushButton("Проверить подключение к БД")
         test_btn.clicked.connect(self.test_db_connection)
         layout.addWidget(test_btn)
 
     def update_buttons_state(self):
-        """Обновляет состояние кнопок в зависимости от выбора"""
+        """Обновляет состояние кнопок в зависимости от выбора и текущего статуса"""
         selected = self.requests_table.selectionModel().selectedRows()
         has_selection = bool(selected)
         
         if has_selection:
             row = selected[0].row()
             status = self.requests_model.index(row, 2).data()
-            is_processed = status in ["Одобрена", "Отклонена"]
             
-            self.approve_btn.setEnabled(not is_processed)
-            self.reject_btn.setEnabled(not is_processed)
-            self.view_btn.setEnabled(True)
+            # Настройка доступности кнопок в зависимости от текущего статуса
+            self.process_btn.setEnabled(status == 'Создана')
+            self.approve_btn.setEnabled(status in ['Создана', 'В обработке'])
+            self.reject_btn.setEnabled(status in ['Создана', 'В обработке'])
         else:
+            self.process_btn.setEnabled(False)
             self.approve_btn.setEnabled(False)
             self.reject_btn.setEnabled(False)
-            self.view_btn.setEnabled(False)
 
     def process_request(self, new_status):
-        """Обработка заявки (одобрение/отклонение)"""
+        """Обработка заявки (изменение статуса)"""
         selected = self.requests_table.selectionModel().selectedRows()
         if not selected:
             QMessageBox.warning(self, "Ошибка", "Выберите заявку для обработки")
@@ -958,12 +966,13 @@ class RequestsWidget(QWidget):
         row = selected[0].row()
         request_id = self.requests_model.index(row, 0).data()
         request_type = self.requests_model.index(row, 1).data()
+        current_status = self.requests_model.index(row, 2).data()
         
         # Подтверждение действия
         reply = QMessageBox.question(
             self,
             "Подтверждение",
-            f"Вы уверены, что хотите {new_status.lower()} заявку {request_id} ({request_type})?",
+            f"Вы уверены, что хотите изменить статус заявки {request_id} ({request_type}) с '{current_status}' на '{new_status}'?",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )
@@ -1015,7 +1024,7 @@ class RequestsWidget(QWidget):
             )
             
     def approve_request(self):
-        self._process_request("Одобрена")
+        self._process_request("Выполнена")
     
     def reject_request(self):
         self._process_request("Отклонена")
@@ -1106,7 +1115,7 @@ class RequestsWidget(QWidget):
         current_status = self.requests_model.index(row, 2).data()
         
         # Проверяем, не обработана ли уже заявка
-        if current_status in ["Одобрена", "Отклонена"]:
+        if current_status in ["Выполнена", "Отклонена"]:
             QMessageBox.warning(self, "Ошибка", "Эта заявка уже обработана")
             return
         
