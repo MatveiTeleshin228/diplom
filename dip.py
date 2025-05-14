@@ -216,7 +216,7 @@ class LogViewerDialog(QDialog):
 
 # Модель для списка студентов
 class StudentsTableModel(QAbstractTableModel):
-    HEADERS = ["ID", "ФИО", "Пол", "Возраст", "Курс", "Факультет"]
+    HEADERS = ["ID", "ФИО", "Пол", "Возраст", "Курс", "Факультет", "Комната"]
 
     def __init__(self):
         super().__init__()
@@ -224,7 +224,12 @@ class StudentsTableModel(QAbstractTableModel):
         self.load_data()
 
     def load_data(self):
-        query = "SELECT id, fio, pol, vozrast, kurs, fakultet FROM students ORDER BY id"
+        query = """
+        SELECT s.id, s.fio, s.pol, s.vozrast, s.kurs, s.fakultet, r.id as room_id 
+        FROM students s
+        LEFT JOIN rooms r ON s.room_id = r.id
+        ORDER BY s.id
+        """
         result, _ = db.execute_query(query, fetch=True)
         if result:
             self.beginResetModel()
@@ -236,6 +241,7 @@ class StudentsTableModel(QAbstractTableModel):
                     "vozrast": row[3],
                     "kurs": row[4],
                     "fakultet": row[5],
+                    "room_id": str(row[6]) if row[6] else "еще не заселен",
                 }
                 for row in result
             ]
@@ -259,6 +265,7 @@ class StudentsTableModel(QAbstractTableModel):
                 student["vozrast"],
                 student["kurs"],
                 student["fakultet"],
+                student["room_id"],
             ][index.column()]
         return None
 
@@ -291,6 +298,7 @@ class StudentsTableModel(QAbstractTableModel):
             if result:  # Если есть результат
                 new_id = result[0][0]  # Получаем ID
                 student["id"] = str(new_id)
+                student["room_id"] = "еще не заселен"  # Новый студент не заселен
 
                 # Добавляем в модель
                 row_position = len(self._students)
@@ -323,6 +331,8 @@ class StudentsTableModel(QAbstractTableModel):
                 int(student["id"]),
             )
             if db.execute_query(query, params):
+                # Сохраняем room_id из старой записи
+                student["room_id"] = self._students[row]["room_id"]
                 self._students[row] = student
                 self.dataChanged.emit(
                     self.index(row, 0), self.index(row, self.columnCount() - 1)
@@ -431,7 +441,7 @@ class RequestsTableModel(QAbstractTableModel):
                     "type": row[1],
                     "status": row[2],
                     "student_fio": row[3],
-                    "room_id": str(row[4]),
+                    "room_id": str(row[4]) if row[4] else "не указана",
                 }
                 for row in result
             ]
@@ -471,7 +481,7 @@ class RequestsTableModel(QAbstractTableModel):
             request_data["type"],
             request_data["status"],
             int(request_data["student_id"]),
-            int(request_data["room_id"]),
+            int(request_data["room_id"]) if request_data["room_id"] != "не указана" else None,
         )
         result = db.execute_query(query, params, fetch=True)
         if result:
@@ -820,7 +830,7 @@ class ZaselRequestDialog(QDialog):
             self.selected_student = dialog.get_selected_student()
             if self.selected_student:
                 self.student_label.setText(
-                    f"{self.selected_student['id']} - {self.selected_student['fio']}"
+                    f"{self.selected_student['id']} - {self.selected_student['fio']} (Комната: {self.selected_student['room_id']})"
                 )
 
     def get_request_data(self):
@@ -872,8 +882,9 @@ class VyselRequestDialog(QDialog):
         if dialog.exec() == QDialog.Accepted:
             self.selected_student = dialog.get_selected_student()
             if self.selected_student:
+                room_info = self.selected_student["room_id"]
                 self.student_label.setText(
-                    f"{self.selected_student['id']} - {self.selected_student['fio']}"
+                    f"{self.selected_student['id']} - {self.selected_student['fio']} (Комната: {room_info})"
                 )
                 # Получаем текущую комнату студента
                 query = "SELECT room_id FROM students WHERE id = %s"
@@ -893,7 +904,7 @@ class VyselRequestDialog(QDialog):
         # Получаем текущую комнату студента
         query = "SELECT room_id FROM students WHERE id = %s"
         result = db.execute_query(
-            query, (int(self.selected_student["id"]),), fetch=True
+            query, (int(self.selected_student["id"])), fetch=True
         )
         if not result or not result[0] or not result[0][0][0]:
             QMessageBox.warning(self, "Ошибка", "Студент не заселен в комнату")
@@ -1348,7 +1359,8 @@ if __name__ == "__main__":
             pol VARCHAR(1) NOT NULL,
             vozrast INTEGER NOT NULL,
             kurs INTEGER NOT NULL,
-            fakultet VARCHAR(50) NOT NULL
+            fakultet VARCHAR(50) NOT NULL,
+            room_id INTEGER REFERENCES rooms(id)
         );
         
         CREATE TABLE IF NOT EXISTS rooms (
