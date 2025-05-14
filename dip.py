@@ -1086,6 +1086,7 @@ class RoomsWidget(QWidget):
 
 
 # Виджет для работы с заявками
+# Виджет для работы с заявками
 class RequestsWidget(QWidget):
     def __init__(self, student_model, room_model):
         super().__init__()
@@ -1093,6 +1094,25 @@ class RequestsWidget(QWidget):
         self.room_model = room_model
 
         layout = QVBoxLayout(self)
+
+        # Панель фильтрации
+        filter_layout = QHBoxLayout()
+        filter_label = QLabel("Фильтр:")
+        self.filter_line_edit = QLineEdit()
+        self.filter_line_edit.setPlaceholderText("Поиск по ID, ФИО, типу или статусу...")
+        self.filter_line_edit.textChanged.connect(self.apply_filter)
+        filter_layout.addWidget(filter_label)
+        filter_layout.addWidget(self.filter_line_edit, 1)
+        
+        # Комбобокс для фильтра по статусу
+        self.status_combo = QComboBox()
+        self.status_combo.addItem("Все статусы", None)
+        for status in RequestsTableModel.STATUS_VALUES:
+            self.status_combo.addItem(status, status)
+        self.status_combo.currentIndexChanged.connect(self.apply_filter)
+        filter_layout.addWidget(self.status_combo)
+        
+        layout.addLayout(filter_layout)
 
         # Кнопки создания заявок
         create_buttons = QHBoxLayout()
@@ -1102,12 +1122,14 @@ class RequestsWidget(QWidget):
         add_vysel_btn.clicked.connect(self.create_vysel_request)
         create_buttons.addWidget(add_zasel_btn)
         create_buttons.addWidget(add_vysel_btn)
-        create_buttons.addWidget(AnimatedButton("Обновить"))
-        create_buttons.itemAt(create_buttons.count()-1).widget().clicked.connect(self.refresh_data)
-
+        
+        # Кнопка обновления
+        refresh_btn = AnimatedButton("Обновить")
+        refresh_btn.clicked.connect(self.refresh_data)
+        create_buttons.addWidget(refresh_btn)
         layout.addLayout(create_buttons)
 
-        # Кнопки обработки заявок (измененные)
+        # Кнопки обработки заявок
         process_buttons = QHBoxLayout()
         self.process_btn = AnimatedButton("В обработку")
         self.process_btn.clicked.connect(lambda: self.process_request("В обработке"))
@@ -1120,10 +1142,18 @@ class RequestsWidget(QWidget):
         process_buttons.addWidget(self.reject_btn)
         layout.addLayout(process_buttons)
 
-        # Таблица заявок
+        # Таблица заявок с прокси-моделью для фильтрации
         self.requests_table = QTableView()
         self.requests_model = RequestsTableModel()
-        self.requests_table.setModel(self.requests_model)
+        
+        # Прокси-модель для фильтрации и сортировки
+        self.proxy_model = QSortFilterProxyModel()
+        self.proxy_model.setSourceModel(self.requests_model)
+        self.proxy_model.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        self.proxy_model.setFilterKeyColumn(-1)  # Поиск по всем столбцам
+        
+        self.requests_table.setModel(self.proxy_model)
+        self.requests_table.setSortingEnabled(True)
         self.requests_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.requests_table.setSelectionBehavior(QTableView.SelectRows)
         layout.addWidget(self.requests_table)
@@ -1134,11 +1164,27 @@ class RequestsWidget(QWidget):
         )
         self.update_buttons_state()
 
-        # Кнопка теста подключения (остается без изменений)
-        test_btn = QPushButton("Проверить подключение к БД")
-        test_btn.clicked.connect(self.test_db_connection)
-        layout.addWidget(test_btn)
+    def apply_filter(self):
+        """Применяет фильтр по тексту и статусу"""
+        text_filter = self.filter_line_edit.text()
+        status_filter = self.status_combo.currentData()
         
+        # Устанавливаем фильтр по тексту
+        self.proxy_model.setFilterRegularExpression(
+            QRegularExpression(text_filter, QRegularExpression.CaseInsensitiveOption)
+        )
+        
+        # Дополнительная фильтрация по статусу
+        if status_filter:
+            self.proxy_model.setFilterRegularExpression(
+                QRegularExpression(f"{text_filter}.*{status_filter}", 
+                                 QRegularExpression.CaseInsensitiveOption)
+            )
+        else:
+            self.proxy_model.setFilterRegularExpression(
+                QRegularExpression(text_filter, QRegularExpression.CaseInsensitiveOption)
+            )
+
     def refresh_data(self):
         """Обновляет данные заявок с сохранением сортировки"""
         self.requests_model.load_data()
