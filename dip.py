@@ -2,6 +2,7 @@ import sys
 import re
 import logging
 import time
+import openpyxl
 import psycopg2
 from psycopg2 import sql
 from PySide6.QtCore import (
@@ -41,7 +42,10 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
 )
 from PySide6.QtWidgets import QDialogButtonBox
-
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
+from datetime import datetime
 # Настройка логирования
 logging.basicConfig(
     level=logging.DEBUG,
@@ -1262,59 +1266,150 @@ class ReportWorkerRunnable(QRunnable):
 
     def run(self):
         try:
-            # Имитация длительной операции
-            for i in range(1, 101):
-                if self._is_cancelled:
-                    self.signals.finished.emit(False)
-                    return
-                time.sleep(0.03)
-                self.signals.progress.emit(i)
+            # Шаг 1: Получение данных
+            self.signals.progress.emit(10)
+            if self._is_cancelled:
+                self.signals.finished.emit(False)
+                return
 
-            # Генерация реального отчёта из базы данных
+            # Получаем данные студентов с информацией о последней заявке
             query = """
             SELECT 
-                s.fio, s.kurs, s.fakultet, 
-                r.id as room_id, r.etazh,
-                req.type, req.status
+                s.id AS student_id,
+                s.fio,
+                s.pol,
+                s.vozrast,
+                s.kurs,
+                s.fakultet,
+                COALESCE(r.id::text, 'не заселен') AS room_number,
+                COALESCE(
+                    (SELECT CONCAT(req.type, ' - ', req.status)
+                    FROM requests req 
+                    WHERE req.student_id = s.id
+                    ORDER BY req.created_at DESC
+                    LIMIT 1),
+                    'нет активных заявок'
+                ) AS last_request_info
             FROM students s
-            LEFT JOIN requests req ON req.student_id = s.id
-            LEFT JOIN rooms r ON req.room_id = r.id
+            LEFT JOIN rooms r ON s.room_id = r.id
             ORDER BY s.fio
             """
-            result, columns = db.execute_query(query, fetch=True)
+            
+            result = db.execute_query(query, fetch=True)
+            if not result or not isinstance(result, tuple) or len(result) != 2:
+                self.signals.error.emit("Ошибка при получении данных из БД")
+                self.signals.finished.emit(False)
+                return
+                
+            students_data, columns = result
+            
+            self.signals.progress.emit(50)
+            if self._is_cancelled:
+                self.signals.finished.emit(False)
+                return
 
-            if result:
-                # Здесь можно сохранить отчёт в файл или выполнить другие действия
-                logging.info("Отчёт сгенерирован. Найдено записей: %d", len(result))
-
+            # Шаг 2: Создание Excel-файла
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Студенты"
+            
+            # Заголовки столбцов
+            headers = [
+                "ID", "ФИО", "Пол", "Возраст", 
+                "Курс", "Факультет", "Комната", "Последняя заявка"
+            ]
+            
+            # Стили
+            header_font = Font(bold=True, color="FFFFFF")
+            header_fill = openpyxl.styles.PatternFill(
+                start_color="3498db", 
+                end_color="3498db", 
+                fill_type="solid"
+            )
+            header_alignment = Alignment(horizontal="center", vertical="center")
+            thin_border = Border(
+                left=Side(style='thin'), 
+                right=Side(style='thin'), 
+                top=Side(style='thin'), 
+                bottom=Side(style='thin')
+            )
+            
+            # Заголовок отчета
+            ws.merge_cells('A1:H1')
+            ws['A1'] = "Отчет по студентам общежития"
+            ws['A1'].font = Font(bold=True, size=14)
+            ws['A1'].alignment = Alignment(horizontal="center")
+            
+            # Заголовки столбцов
+            for col_num, header in enumerate(headers, 1):
+                cell = ws.cell(row=2, column=col_num)
+                cell.value = header
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = header_alignment
+                cell.border = thin_border
+                
+                column_letter = get_column_letter(col_num)
+                ws.column_dimensions[column_letter].width = max(len(header) + 2, 12)
+            
+            # Данные студентов
+            if students_data:
+                for row_num, row_data in enumerate(students_data, 3):
+                    for col_num, cell_value in enumerate(row_data, 1):
+                        cell = ws.cell(row=row_num, column=col_num)
+                        cell.value = cell_value
+                        cell.border = thin_border
+                        
+                        column_letter = get_column_letter(col_num)
+                        current_width = ws.column_dimensions[column_letter].width
+                        cell_length = len(str(cell_value)) + 2
+                        if cell_length > current_width:
+                            ws.column_dimensions[column_letter].width = cell_length
+            else:
+                ws['A3'] = "Нет данных о студентах"
+            
+            # Замораживаем заголовки
+            ws.freeze_panes = 'A3'
+            
+            # Добавляем дату создания отчета
+            last_row = len(students_data) + 3 if students_data else 4
+            ws['A' + str(last_row)] = "Отчет создан:"
+            ws['B' + str(last_row)] = datetime.now().strftime("%d.%m.%Y %H:%M")
+            
+            # Сохранение файла
+            filename = f"students_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            wb.save(filename)
+            
+            self.signals.progress.emit(100)
             self.signals.finished.emit(True)
+            
         except Exception as e:
-            logging.error("Ошибка генерации отчёта: %s", e)
-            self.signals.error.emit(str(e))
+            logging.error(f"Ошибка при генерации отчёта: {e}")
+            self.signals.error.emit(f"Ошибка: {str(e)}")
             self.signals.finished.emit(False)
-
-
+                        
 # Виджет для отчётности
 class ReportsWidget(QWidget):
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
-        self.export_button = AnimatedButton("Выгрузить отчёт")
+        self.export_button = AnimatedButton("Выгрузить отчёт в Excel")
         self.export_button.clicked.connect(self.export_report)
         layout.addWidget(self.export_button)
         self.progress_dialog = None
 
     def export_report(self):
         self.progress_dialog = QProgressDialog(
-            "Генерация отчёта...", "Отмена", 0, 100, self
+            "Подготовка данных для выгрузки...", "Отмена", 0, 100, self
         )
-        self.progress_dialog.setWindowTitle("Отчёт")
+        self.progress_dialog.setWindowTitle("Экспорт в Excel")
         self.progress_dialog.setWindowModality(Qt.WindowModal)
         self.progress_dialog.setAutoClose(True)
-
+        
         self.worker = ReportWorkerRunnable()
         self.worker.signals.progress.connect(self.progress_dialog.setValue)
         self.worker.signals.finished.connect(self.report_finished)
+        self.worker.signals.error.connect(self.report_error)
         self.progress_dialog.canceled.connect(
             lambda: setattr(self.worker, "_is_cancelled", True)
         )
@@ -1324,10 +1419,14 @@ class ReportsWidget(QWidget):
     def report_finished(self, success):
         if success:
             QMessageBox.information(
-                self, "Отчёт", "Отчёт успешно сгенерирован и выгружен."
+                self, "Успех", "Отчёт успешно выгружен в файл 'report.xlsx'"
             )
-        else:
-            QMessageBox.warning(self, "Отчёт", "Ошибка при генерации отчёта.")
+        self.progress_dialog.close()
+
+    def report_error(self, error_msg):
+        QMessageBox.critical(self, "Ошибка", f"Ошибка при выгрузке отчёта: {error_msg}")
+        self.progress_dialog.close()
+
 
 
 # Главное окно приложения
