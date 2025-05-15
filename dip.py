@@ -1160,18 +1160,6 @@ class RoomsWidget(QWidget):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(15)
 
-        # Заголовок
-        title = QLabel("Список комнат")
-        title.setStyleSheet(
-            """
-            font-size: 16px;
-            font-weight: bold;
-            color: #2c3e50;
-            padding-bottom: 10px;
-        """
-        )
-        layout.addWidget(title)
-
         # Кнопка обновления
         self.refresh_button = AnimatedButton("Обновить список")
         self.refresh_button.clicked.connect(self.refresh_data)
@@ -1187,9 +1175,9 @@ class RoomsWidget(QWidget):
                 background-color: white;
             }
             QHeaderView::section {
-                background-color: #3498db;
-                color: white;
-                padding: 5px;
+                background-color: #ecf0f1; 
+                color: #2c3e50;            
+                padding: 8px;
             }
         """
         )
