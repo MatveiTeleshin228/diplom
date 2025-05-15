@@ -1153,12 +1153,23 @@ class StudentsWidget(QWidget):
 
 
 # Виджет для отображения списка комнат
+# Виджет для отображения списка комнат
 class RoomsWidget(QWidget):
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(15)
+
+        # Добавляем строку поиска
+        filter_layout = QHBoxLayout()
+        filter_label = QLabel("Поиск:")
+        self.filter_edit = QLineEdit()
+        self.filter_edit.setPlaceholderText("Введите ID комнаты или этаж...")
+        self.filter_edit.textChanged.connect(self.apply_filter)
+        filter_layout.addWidget(filter_label)
+        filter_layout.addWidget(self.filter_edit)
+        layout.addLayout(filter_layout)
 
         # Кнопка обновления
         self.refresh_button = AnimatedButton("Обновить список")
@@ -1182,7 +1193,15 @@ class RoomsWidget(QWidget):
         """
         )
         self.rooms_model = RoomsTableModel()
-        self.table.setModel(self.rooms_model)
+        
+        # Прокси-модель для фильтрации
+        self.proxy_model = QSortFilterProxyModel()
+        self.proxy_model.setSourceModel(self.rooms_model)
+        self.proxy_model.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        # Фильтрация будет выполняться вручную через filterAcceptsRow
+        self.proxy_model.setFilterKeyColumn(-1)  # -1 означает, что фильтрация будет выполняться для всех столбцов
+        
+        self.table.setModel(self.proxy_model)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setSelectionBehavior(QTableView.SelectRows)
         self.table.setSelectionMode(QTableView.SingleSelection)
@@ -1192,6 +1211,7 @@ class RoomsWidget(QWidget):
         self.table.selectionModel().selectionChanged.connect(self.show_room_students)
         layout.addWidget(self.table)
 
+        # Остальной код без изменений...
         # Виджет для отображения студентов
         self.students_frame = QFrame()
         self.students_frame.setStyleSheet(
@@ -1230,6 +1250,33 @@ class RoomsWidget(QWidget):
 
         layout.addWidget(self.students_frame)
 
+    def apply_filter(self, text):
+        """Применяет фильтр к данным комнат (только по ID или этажу)"""
+        self.proxy_model.setFilterFixedString(text)
+        logging.info(f"Применён фильтр комнат: {text}")
+
+    def filterAcceptsRow(self, source_row, source_parent):
+        """Переопределяем метод фильтрации для поиска только по ID и этажу"""
+        if not self.filter_edit.text():
+            return True
+            
+        text = self.filter_edit.text().lower()
+        model = self.proxy_model.sourceModel()
+        
+        # Проверяем ID комнаты (первый столбец)
+        id_index = model.index(source_row, 0, source_parent)
+        id_data = model.data(id_index, Qt.DisplayRole)
+        if text in str(id_data).lower():
+            return True
+            
+        # Проверяем этаж (второй столбец)
+        floor_index = model.index(source_row, 1, source_parent)
+        floor_data = model.data(floor_index, Qt.DisplayRole)
+        if text in str(floor_data).lower():
+            return True
+            
+        return False
+
     def show_room_students(self):
         """Отображает список студентов в выбранной комнате"""
         selected = self.table.selectionModel().selectedRows()
@@ -1240,7 +1287,11 @@ class RoomsWidget(QWidget):
             )
             return
 
-        room_id = self.rooms_model.index(selected[0].row(), 0).data()
+        # Получаем индекс из прокси-модели и преобразуем его в индекс исходной модели
+        proxy_index = selected[0]
+        source_index = self.proxy_model.mapToSource(proxy_index)
+        
+        room_id = self.rooms_model.index(source_index.row(), 0).data()
 
         # Получаем данные о комнате
         room_query = "SELECT etazh, kol_mest, svobodno FROM rooms WHERE id = %s"
@@ -1287,8 +1338,7 @@ class RoomsWidget(QWidget):
             "Данные обновлены. Выберите комнату для просмотра информации."
         )
         QMessageBox.information(self, "Обновление", "Данные о комнатах обновлены.")
-
-
+        
 # Виджет для работы с заявками
 class RequestsWidget(QWidget):
     def __init__(self, student_model, room_model):
