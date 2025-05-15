@@ -266,7 +266,7 @@ class LogViewerDialog(QDialog):
 
 # Модель для списка студентов
 class StudentsTableModel(QAbstractTableModel):
-    HEADERS = ["ID", "ФИО", "Пол", "Возраст", "Курс", "Факультет", "Комната"]
+    HEADERS = ["ID", "ФИО", "Пол", "Возраст", "Курс", "Факультет", "Телефон", "Комната"]  # Добавлен столбец "Телефон"
 
     def __init__(self):
         super().__init__()
@@ -275,7 +275,7 @@ class StudentsTableModel(QAbstractTableModel):
 
     def load_data(self):
         query = """
-        SELECT s.id, s.fio, s.pol, s.vozrast, s.kurs, s.fakultet, r.id as room_id 
+        SELECT s.id, s.fio, s.pol, s.vozrast, s.kurs, s.fakultet, s.number_phone, r.id as room_id 
         FROM students s
         LEFT JOIN rooms r ON s.room_id = r.id
         ORDER BY s.id
@@ -291,7 +291,8 @@ class StudentsTableModel(QAbstractTableModel):
                     "vozrast": row[3],
                     "kurs": row[4],
                     "fakultet": row[5],
-                    "room_id": str(row[6]) if row[6] else "еще не заселен",
+                    "number_phone": row[6] if row[6] else "не указан",  # Добавлено поле телефона
+                    "room_id": str(row[7]) if row[7] else "еще не заселен",
                 }
                 for row in result
             ]
@@ -315,6 +316,7 @@ class StudentsTableModel(QAbstractTableModel):
                 student["vozrast"],
                 student["kurs"],
                 student["fakultet"],
+                student["number_phone"],  # Добавлено отображение телефона
                 student["room_id"],
             ][index.column()]
         return None
@@ -330,8 +332,8 @@ class StudentsTableModel(QAbstractTableModel):
             db.connect()
 
         query = """
-        INSERT INTO students (fio, pol, vozrast, kurs, fakultet) 
-        VALUES (%s, %s, %s, %s, %s) RETURNING id
+        INSERT INTO students (fio, pol, vozrast, kurs, fakultet, number_phone) 
+        VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
         """
         params = (
             student["fio"],
@@ -339,6 +341,7 @@ class StudentsTableModel(QAbstractTableModel):
             student["vozrast"],
             student["kurs"],
             student["fakultet"],
+            student["number_phone"],  # Добавлен телефон
         )
 
         try:
@@ -369,7 +372,7 @@ class StudentsTableModel(QAbstractTableModel):
         if 0 <= row < len(self._students):
             query = """
             UPDATE students 
-            SET fio = %s, pol = %s, vozrast = %s, kurs = %s, fakultet = %s 
+            SET fio = %s, pol = %s, vozrast = %s, kurs = %s, fakultet = %s, number_phone = %s 
             WHERE id = %s
             """
             params = (
@@ -378,6 +381,7 @@ class StudentsTableModel(QAbstractTableModel):
                 student["vozrast"],
                 student["kurs"],
                 student["fakultet"],
+                student["number_phone"],  # Добавлен телефон
                 int(student["id"]),
             )
             if db.execute_query(query, params):
@@ -805,6 +809,20 @@ class AddEditStudentDialog(QDialog):
         self.fio_edit.setPlaceholderText("Введите ФИО (Иванов Иван Иванович)")
         self.fio_edit.textChanged.connect(self.validate_inputs)
 
+        # Добавляем поле для телефона
+        self.phone_edit = QLineEdit()
+        self.phone_edit.setPlaceholderText("Введите номер телефона")
+        self.phone_edit.textChanged.connect(self.validate_inputs)
+        
+        # Добавляем валидатор для телефона
+        phone_validator = QRegularExpressionValidator(
+            QRegularExpression(r"^\+?[\d\s\-()]{7,15}$"), self
+        )
+        self.phone_edit.setValidator(phone_validator)
+
+        # Добавляем поле в форму
+        layout.addRow("Телефон:", self.phone_edit)
+
         self.pol_combo = QComboBox()
         self.pol_combo.addItems(["М", "Ж"])
 
@@ -850,6 +868,7 @@ class AddEditStudentDialog(QDialog):
             self.vozrast_spin.setValue(int(student_data.get("vozrast", 18)))
             self.kurs_spin.setValue(int(student_data.get("kurs", 1)))
             self.fakultet_edit.setText(student_data.get("fakultet", ""))
+            self.phone_edit.setText(student_data.get("number_phone", ""))
         self.validate_inputs()
 
     def validate_inputs(self):
@@ -884,6 +903,7 @@ class AddEditStudentDialog(QDialog):
             "vozrast": self.vozrast_spin.value(),
             "kurs": self.kurs_spin.value(),
             "fakultet": self.fakultet_edit.text().strip(),
+            "number_phone": self.phone_edit.text().strip(),  # Добавлено поле телефона
         }
 
 
@@ -1810,6 +1830,7 @@ if __name__ == "__main__":
             vozrast INTEGER NOT NULL,
             kurs INTEGER NOT NULL,
             fakultet VARCHAR(50) NOT NULL,
+            number_phone VARCHAR(20),  # Добавлено поле для телефона
             room_id INTEGER REFERENCES rooms(id)
         );
         
