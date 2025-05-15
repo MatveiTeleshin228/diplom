@@ -40,12 +40,14 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QSizePolicy,
     QPlainTextEdit,
+    QFrame,
 )
 from PySide6.QtWidgets import QDialogButtonBox
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from datetime import datetime
+
 # Настройка логирования
 logging.basicConfig(
     level=logging.DEBUG,
@@ -191,6 +193,49 @@ QPushButton[text="Отклонить заявку"]:hover {
 }
 QPushButton[text="Просмотр деталей"] {
     background-color: #3498db;
+}
+RoomWidget {
+    background-color: #f5f7fa;
+}
+
+RoomWidget QLabel#title {
+    font-size: 18px;
+    font-weight: bold;
+    color: #2c3e50;
+    padding: 10px;
+}
+
+RoomWidget QTableView {
+    border: 1px solid #bdc3c7;
+    border-radius: 5px;
+    background-color: white;
+}
+
+RoomWidget QHeaderView::section {
+    background-color: #3498db;
+    color: white;
+    padding: 5px;
+    border: none;
+}
+
+RoomWidget QFrame#infoFrame {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    padding: 15px;
+}
+
+RoomWidget QLabel#studentsTitle {
+    font-size: 14px;
+    font-weight: bold;
+    color: #2c3e50;
+    padding-bottom: 10px;
+}
+
+RoomWidget QLabel#studentsList {
+    font-size: 13px;
+    color: #495057;
+    line-height: 1.4;
 }
 """
 
@@ -421,7 +466,7 @@ class RoomsTableModel(QAbstractTableModel):
 # Модель для заявок
 class RequestsTableModel(QAbstractTableModel):
     HEADERS = ["ID", "Тип заявки", "Статус", "Студент", "Комната"]
-    STATUS_VALUES = ['Создана', 'В обработке', 'Выполнена', 'Отклонена']
+    STATUS_VALUES = ["Создана", "В обработке", "Выполнена", "Отклонена"]
 
     def __init__(self):
         super().__init__()
@@ -450,7 +495,7 @@ class RequestsTableModel(QAbstractTableModel):
                 for row in result
             ]
             self.endResetModel()
-                
+
     def add_request(self, request_data):
         query = """
         INSERT INTO requests (type, status, student_id, room_id) 
@@ -460,7 +505,11 @@ class RequestsTableModel(QAbstractTableModel):
             request_data["type"],
             request_data["status"],
             int(request_data["student_id"]),
-            int(request_data["room_id"]) if request_data["room_id"] != "не указана" else None,
+            (
+                int(request_data["room_id"])
+                if request_data["room_id"] != "не указана"
+                else None
+            ),
         )
         result = db.execute_query(query, params, fetch=True)
         if result:
@@ -469,7 +518,7 @@ class RequestsTableModel(QAbstractTableModel):
             # Прокручиваем к верхней позиции (новой заявке)
             return True
         return False
-    
+
     def rowCount(self, parent=QModelIndex()):
         return len(self._requests)
 
@@ -504,7 +553,11 @@ class RequestsTableModel(QAbstractTableModel):
             request_data["type"],
             request_data["status"],
             int(request_data["student_id"]),
-            int(request_data["room_id"]) if request_data["room_id"] != "не указана" else None,
+            (
+                int(request_data["room_id"])
+                if request_data["room_id"] != "не указана"
+                else None
+            ),
         )
         result = db.execute_query(query, params, fetch=True)
         if result:
@@ -670,6 +723,7 @@ class StudentSelectionDialog(QDialog):
             return self.proxy_model.sourceModel().get_student(source_index.row())
         return None
 
+
 # Прокси-модель для фильтрации заявок
 class RequestsProxyModel(QSortFilterProxyModel):
     def __init__(self, parent=None):
@@ -687,14 +741,16 @@ class RequestsProxyModel(QSortFilterProxyModel):
 
     def filterAcceptsRow(self, source_row, source_parent):
         source_model = self.sourceModel()
-        
+
         # Фильтр по статусу (если задан)
         if self.status_filter:
-            status_index = source_model.index(source_row, 2, source_parent)  # 2 - колонка статуса
+            status_index = source_model.index(
+                source_row, 2, source_parent
+            )  # 2 - колонка статуса
             status = source_model.data(status_index, Qt.DisplayRole)
             if status != self.status_filter:
                 return False
-        
+
         # Фильтр по тексту (если задан)
         if self.filter_text.strip():
             for col in range(source_model.columnCount()):
@@ -705,9 +761,10 @@ class RequestsProxyModel(QSortFilterProxyModel):
                 if self.filter_text.lower() in str(data).lower():
                     return True
             return False
-        
+
         return True
-        
+
+
 # Прокси-модель для фильтрации студентов
 class StudentsProxyModel(QSortFilterProxyModel):
     def __init__(self, parent=None):
@@ -979,6 +1036,7 @@ class VyselRequestDialog(QDialog):
             "room_id": room_id,
         }
 
+
 # Виджет для отображения списка студентов
 class StudentsWidget(QWidget):
     def __init__(self):
@@ -1003,7 +1061,6 @@ class StudentsWidget(QWidget):
         layout.addLayout(refresh_layout)
 
         filter_layout = QHBoxLayout()
-
 
         self.students_model = StudentsTableModel()
         self.proxy_model = StudentsProxyModel()
@@ -1034,7 +1091,7 @@ class StudentsWidget(QWidget):
     def refresh_data(self):
         """Обновляет данные студентов"""
         self.students_model.load_data()
-    
+
     def add_student(self):
         dialog = AddEditStudentDialog(self)
         if dialog.exec() == QDialog.Accepted:
@@ -1100,24 +1157,147 @@ class RoomsWidget(QWidget):
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(15)
+
+        # Заголовок
+        title = QLabel("Список комнат")
+        title.setStyleSheet(
+            """
+            font-size: 16px;
+            font-weight: bold;
+            color: #2c3e50;
+            padding-bottom: 10px;
+        """
+        )
+        layout.addWidget(title)
 
         # Кнопка обновления
-        self.refresh_button = AnimatedButton("Обновить данные")
+        self.refresh_button = AnimatedButton("Обновить список")
         self.refresh_button.clicked.connect(self.refresh_data)
         layout.addWidget(self.refresh_button)
 
-        # Таблица
+        # Таблица комнат
         self.table = QTableView()
+        self.table.setStyleSheet(
+            """
+            QTableView {
+                border: 1px solid #bdc3c7;
+                border-radius: 5px;
+                background-color: white;
+            }
+            QHeaderView::section {
+                background-color: #3498db;
+                color: white;
+                padding: 5px;
+            }
+        """
+        )
         self.rooms_model = RoomsTableModel()
         self.table.setModel(self.rooms_model)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setSelectionBehavior(QTableView.SelectRows)
-        self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.table.setSelectionMode(QTableView.SingleSelection)
+        self.table.setMinimumHeight(200)
+
+        # Подключаем обработчик выбора
+        self.table.selectionModel().selectionChanged.connect(self.show_room_students)
         layout.addWidget(self.table)
+
+        # Виджет для отображения студентов
+        self.students_frame = QFrame()
+        self.students_frame.setStyleSheet(
+            """
+            QFrame {
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 5px;
+                padding: 15px;
+            }
+        """
+        )
+        students_layout = QVBoxLayout(self.students_frame)
+        students_layout.setContentsMargins(10, 10, 10, 10)
+
+        self.students_title = QLabel("Выберите комнату")
+        self.students_title.setStyleSheet(
+            """
+            font-size: 14px;
+            font-weight: bold;
+            color: #2c3e50;
+            padding-bottom: 10px;
+        """
+        )
+        students_layout.addWidget(self.students_title)
+
+        self.students_list = QLabel()
+        self.students_list.setStyleSheet(
+            """
+            font-size: 13px;
+            color: #495057;
+        """
+        )
+        self.students_list.setWordWrap(True)
+        students_layout.addWidget(self.students_list)
+
+        layout.addWidget(self.students_frame)
+
+    def show_room_students(self):
+        """Отображает список студентов в выбранной комнате"""
+        selected = self.table.selectionModel().selectedRows()
+        if not selected:
+            self.students_title.setText("Выберите комнату")
+            self.students_list.setText(
+                "Для просмотра списка проживающих выберите комнату из таблицы выше"
+            )
+            return
+
+        room_id = self.rooms_model.index(selected[0].row(), 0).data()
+
+        # Получаем данные о комнате
+        room_query = "SELECT etazh, kol_mest, svobodno FROM rooms WHERE id = %s"
+        room_data = db.execute_query(room_query, (room_id,), fetch=True)
+
+        # Получаем список студентов
+        students_query = """
+        SELECT fio, kurs, fakultet 
+        FROM students 
+        WHERE room_id = %s
+        ORDER BY fio
+        """
+        students_data = db.execute_query(students_query, (room_id,), fetch=True)
+
+        # Формируем текст
+        if room_data and room_data[0]:
+            etazh, kol_mest, svobodno = room_data[0][0]
+            occupied = kol_mest - svobodno
+
+            room_info = f"<b>Комната {room_id}</b> (Этаж {etazh})<br>"
+            room_info += f"Мест: {kol_mest}, свободно: {svobodno}<br><br>"
+
+            if students_data and students_data[0]:
+                students = students_data[0]
+                students_list = "<b>Проживают:</b><br>"
+                students_list += "<br>".join(
+                    [f"• {s[0]} ({s[2]}, {s[1]} курс)" for s in students]
+                )
+                students_list += f"<br><br>Всего проживает: {occupied}"
+            else:
+                students_list = "В комнате никто не проживает"
+
+            self.students_title.setText(f"Информация о комнате {room_id}")
+            self.students_list.setText(room_info + students_list)
+        else:
+            self.students_title.setText("Ошибка")
+            self.students_list.setText("Не удалось загрузить информацию о комнате")
 
     def refresh_data(self):
         """Обновляет данные в таблице комнат"""
         self.rooms_model.load_data()
+        self.students_title.setText("Выберите комнату")
+        self.students_list.setText(
+            "Данные обновлены. Выберите комнату для просмотра информации."
+        )
         QMessageBox.information(self, "Обновление", "Данные о комнатах обновлены.")
 
 
@@ -1132,14 +1312,16 @@ class RequestsWidget(QWidget):
 
         # Добавляем фильтры
         filter_layout = QHBoxLayout()
-        
+
         # Фильтр по тексту
         self.filter_edit = QLineEdit()
-        self.filter_edit.setPlaceholderText("Поиск по ID, типу, студенту или комнате...")
+        self.filter_edit.setPlaceholderText(
+            "Поиск по ID, типу, студенту или комнате..."
+        )
         self.filter_edit.textChanged.connect(self.apply_filters)
         filter_layout.addWidget(QLabel("Поиск:"))
         filter_layout.addWidget(self.filter_edit)
-        
+
         # Фильтр по статусу
         self.status_combo = QComboBox()
         self.status_combo.addItem("Все статусы")  # Первый элемент - "Все статусы"
@@ -1147,7 +1329,7 @@ class RequestsWidget(QWidget):
         self.status_combo.currentTextChanged.connect(self.apply_filters)
         filter_layout.addWidget(QLabel("Статус:"))
         filter_layout.addWidget(self.status_combo)
-        
+
         layout.addLayout(filter_layout)
 
         # Кнопки создания заявок
@@ -1159,7 +1341,9 @@ class RequestsWidget(QWidget):
         create_buttons.addWidget(add_zasel_btn)
         create_buttons.addWidget(add_vysel_btn)
         create_buttons.addWidget(AnimatedButton("Обновить"))
-        create_buttons.itemAt(create_buttons.count()-1).widget().clicked.connect(self.refresh_data)
+        create_buttons.itemAt(create_buttons.count() - 1).widget().clicked.connect(
+            self.refresh_data
+        )
         layout.addLayout(create_buttons)
 
         # Кнопки обработки заявок
@@ -1195,12 +1379,12 @@ class RequestsWidget(QWidget):
         test_btn = QPushButton("Проверить подключение к БД")
         test_btn.clicked.connect(self.test_db_connection)
         layout.addWidget(test_btn)
-        
+
     def apply_filters(self):
         """Применяет фильтры к прокси-модели"""
         self.proxy_model.setFilterText(self.filter_edit.text())
-        self.proxy_model.setStatusFilter(self.status_combo.currentText())    
-        
+        self.proxy_model.setStatusFilter(self.status_combo.currentText())
+
     def refresh_data(self):
         """Обновляет данные заявок с сохранением сортировки"""
         self.requests_model.load_data()
@@ -1216,9 +1400,11 @@ class RequestsWidget(QWidget):
             # Получаем индекс из прокси-модели и преобразуем его в индекс исходной модели
             proxy_index = selected[0]
             source_index = self.proxy_model.mapToSource(proxy_index)
-            
+
             # Получаем статус заявки из исходной модели
-            status_index = self.requests_model.index(source_index.row(), 2)  # 2 - колонка статуса
+            status_index = self.requests_model.index(
+                source_index.row(), 2
+            )  # 2 - колонка статуса
             status = self.requests_model.data(status_index, Qt.DisplayRole)
 
             # Настройка доступности кнопок в зависимости от текущего статуса
@@ -1229,7 +1415,7 @@ class RequestsWidget(QWidget):
             self.process_btn.setEnabled(False)
             self.approve_btn.setEnabled(False)
             self.reject_btn.setEnabled(False)
-            
+
     def process_request(self, new_status):
         """Обработка заявки (изменение статуса)"""
         selected = self.requests_table.selectionModel().selectedRows()
@@ -1240,7 +1426,7 @@ class RequestsWidget(QWidget):
         # Получаем индекс из прокси-модели и преобразуем его в индекс исходной модели
         proxy_index = selected[0]
         source_index = self.proxy_model.mapToSource(proxy_index)
-        
+
         request_id = self.requests_model.index(source_index.row(), 0).data()
         request_type = self.requests_model.index(source_index.row(), 1).data()
         current_status = self.requests_model.index(source_index.row(), 2).data()
@@ -1321,6 +1507,7 @@ class RequestsWidget(QWidget):
                         self, "Ошибка", "Не удалось создать заявку на выселение."
                     )
 
+
 # Асинхронное задание для генерации отчёта
 class WorkerSignals(QObject):
     progress = Signal(int)
@@ -1364,15 +1551,15 @@ class ReportWorkerRunnable(QRunnable):
             LEFT JOIN rooms r ON s.room_id = r.id
             ORDER BY s.fio
             """
-            
+
             result = db.execute_query(query, fetch=True)
             if not result or not isinstance(result, tuple) or len(result) != 2:
                 self.signals.error.emit("Ошибка при получении данных из БД")
                 self.signals.finished.emit(False)
                 return
-                
+
             students_data, columns = result
-            
+
             self.signals.progress.emit(50)
             if self._is_cancelled:
                 self.signals.finished.emit(False)
@@ -1382,34 +1569,38 @@ class ReportWorkerRunnable(QRunnable):
             wb = Workbook()
             ws = wb.active
             ws.title = "Студенты"
-            
+
             # Заголовки столбцов
             headers = [
-                "ID", "ФИО", "Пол", "Возраст", 
-                "Курс", "Факультет", "Комната", "Последняя заявка"
+                "ID",
+                "ФИО",
+                "Пол",
+                "Возраст",
+                "Курс",
+                "Факультет",
+                "Комната",
+                "Последняя заявка",
             ]
-            
+
             # Стили
             header_font = Font(bold=True, color="FFFFFF")
             header_fill = openpyxl.styles.PatternFill(
-                start_color="3498db", 
-                end_color="3498db", 
-                fill_type="solid"
+                start_color="3498db", end_color="3498db", fill_type="solid"
             )
             header_alignment = Alignment(horizontal="center", vertical="center")
             thin_border = Border(
-                left=Side(style='thin'), 
-                right=Side(style='thin'), 
-                top=Side(style='thin'), 
-                bottom=Side(style='thin')
+                left=Side(style="thin"),
+                right=Side(style="thin"),
+                top=Side(style="thin"),
+                bottom=Side(style="thin"),
             )
-            
+
             # Заголовок отчета
-            ws.merge_cells('A1:H1')
-            ws['A1'] = "Отчет по студентам общежития"
-            ws['A1'].font = Font(bold=True, size=14)
-            ws['A1'].alignment = Alignment(horizontal="center")
-            
+            ws.merge_cells("A1:H1")
+            ws["A1"] = "Отчет по студентам общежития"
+            ws["A1"].font = Font(bold=True, size=14)
+            ws["A1"].alignment = Alignment(horizontal="center")
+
             # Заголовки столбцов
             for col_num, header in enumerate(headers, 1):
                 cell = ws.cell(row=2, column=col_num)
@@ -1418,10 +1609,10 @@ class ReportWorkerRunnable(QRunnable):
                 cell.fill = header_fill
                 cell.alignment = header_alignment
                 cell.border = thin_border
-                
+
                 column_letter = get_column_letter(col_num)
                 ws.column_dimensions[column_letter].width = max(len(header) + 2, 12)
-            
+
             # Данные студентов
             if students_data:
                 for row_num, row_data in enumerate(students_data, 3):
@@ -1429,35 +1620,38 @@ class ReportWorkerRunnable(QRunnable):
                         cell = ws.cell(row=row_num, column=col_num)
                         cell.value = cell_value
                         cell.border = thin_border
-                        
+
                         column_letter = get_column_letter(col_num)
                         current_width = ws.column_dimensions[column_letter].width
                         cell_length = len(str(cell_value)) + 2
                         if cell_length > current_width:
                             ws.column_dimensions[column_letter].width = cell_length
             else:
-                ws['A3'] = "Нет данных о студентах"
-            
+                ws["A3"] = "Нет данных о студентах"
+
             # Замораживаем заголовки
-            ws.freeze_panes = 'A3'
-            
+            ws.freeze_panes = "A3"
+
             # Добавляем дату создания отчета
             last_row = len(students_data) + 3 if students_data else 4
-            ws['A' + str(last_row)] = "Отчет создан:"
-            ws['B' + str(last_row)] = datetime.now().strftime("%d.%m.%Y %H:%M")
-            
+            ws["A" + str(last_row)] = "Отчет создан:"
+            ws["B" + str(last_row)] = datetime.now().strftime("%d.%m.%Y %H:%M")
+
             # Сохранение файла
-            filename = f"students_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            filename = (
+                f"students_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            )
             wb.save(filename)
-            
+
             self.signals.progress.emit(100)
             self.signals.finished.emit(True)
-            
+
         except Exception as e:
             logging.error(f"Ошибка при генерации отчёта: {e}")
             self.signals.error.emit(f"Ошибка: {str(e)}")
             self.signals.finished.emit(False)
-                        
+
+
 # Виджет для отчётности
 class ReportsWidget(QWidget):
     def __init__(self):
@@ -1475,7 +1669,7 @@ class ReportsWidget(QWidget):
         self.progress_dialog.setWindowTitle("Экспорт в Excel")
         self.progress_dialog.setWindowModality(Qt.WindowModal)
         self.progress_dialog.setAutoClose(True)
-        
+
         self.worker = ReportWorkerRunnable()
         self.worker.signals.progress.connect(self.progress_dialog.setValue)
         self.worker.signals.finished.connect(self.report_finished)
@@ -1496,7 +1690,6 @@ class ReportsWidget(QWidget):
     def report_error(self, error_msg):
         QMessageBox.critical(self, "Ошибка", f"Ошибка при выгрузке отчёта: {error_msg}")
         self.progress_dialog.close()
-
 
 
 # Главное окно приложения
