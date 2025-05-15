@@ -1830,7 +1830,7 @@ if __name__ == "__main__":
             vozrast INTEGER NOT NULL,
             kurs INTEGER NOT NULL,
             fakultet VARCHAR(50) NOT NULL,
-            number_phone VARCHAR(20),  # Добавлено поле для телефона
+            number_phone VARCHAR(20),
             room_id INTEGER REFERENCES rooms(id)
         );
         
