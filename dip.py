@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QPlainTextEdit,
     QFrame,
+    QCheckBox,
 )
 from PySide6.QtWidgets import QDialogButtonBox
 from openpyxl import Workbook
@@ -331,6 +332,11 @@ class StudentsTableModel(QAbstractTableModel):
         if not db.connection or db.connection.closed:
             db.connect()
 
+        # Обрабатываем пустой номер телефона
+        number_phone = student.get("number_phone", "").strip()
+        if not number_phone:
+            number_phone = None  # Устанавливаем NULL вместо пустой строки
+
         query = """
         INSERT INTO students (fio, pol, vozrast, kurs, fakultet, number_phone) 
         VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
@@ -341,32 +347,35 @@ class StudentsTableModel(QAbstractTableModel):
             student["vozrast"],
             student["kurs"],
             student["fakultet"],
-            student["number_phone"],  # Добавлен телефон
+            number_phone,  # Используем обработанное значение
         )
 
         try:
             # Выполняем запрос
-            result, _ = db.execute_query(query, params, fetch=True)
+            result = db.execute_query(query, params, fetch=True)
+            
+            # Проверяем результат
+            if not result or not result[0]:  # Если нет результата
+                return False
 
-            if result:  # Если есть результат
-                new_id = result[0][0]  # Получаем ID
-                student["id"] = str(new_id)
-                student["room_id"] = "еще не заселен"  # Новый студент не заселен
+            new_id = result[0][0][0]  # Получаем ID
+            student["id"] = str(new_id)
+            student["room_id"] = "еще не заселен"  # Новый студент не заселен
 
-                # Добавляем в модель
-                row_position = len(self._students)
-                self.beginInsertRows(QModelIndex(), row_position, row_position)
-                self._students.append(student)
-                self.endInsertRows()
+            # Добавляем в модель
+            row_position = len(self._students)
+            self.beginInsertRows(QModelIndex(), row_position, row_position)
+            self._students.append(student)
+            self.endInsertRows()
 
-                logging.info(f"Добавлен студент ID {new_id}: {student}")
-                return True
+            logging.info(f"Добавлен студент ID {new_id}: {student}")
+            return True
 
         except Exception as e:
             logging.error(f"Ошибка при добавлении студента: {e}")
-            db.connection.rollback()
-
-        return False
+            if self.connection:
+                self.connection.rollback()
+            return False
 
     def update_student(self, row, student):
         if 0 <= row < len(self._students):
@@ -411,6 +420,89 @@ class StudentsTableModel(QAbstractTableModel):
         if 0 <= row < len(self._students):
             return self._students[row]
         return None
+
+    def update_multiple_students(self, rows, student_data):
+        """Обновляет несколько студентов"""
+        if not rows:
+            return False
+        
+        updated_ids = []
+        for row in sorted(rows, reverse=True):
+            if 0 <= row < len(self._students):
+                student = self._students[row]
+                updated_ids.append(student["id"])
+                
+                # Обновляем только те поля, которые были изменены
+                for key in student_data:
+                    if key in student:
+                        student[key] = student_data[key]
+        
+        if not updated_ids:
+            return False
+            
+        # Формируем SQL запрос для обновления
+        set_parts = []
+        params = []
+        
+        if "fio" in student_data:
+            set_parts.append("fio = %s")
+            params.append(student_data["fio"])
+        if "pol" in student_data:
+            set_parts.append("pol = %s")
+            params.append(student_data["pol"])
+        if "vozrast" in student_data:
+            set_parts.append("vozrast = %s")
+            params.append(student_data["vozrast"])
+        if "kurs" in student_data:
+            set_parts.append("kurs = %s")
+            params.append(student_data["kurs"])
+        if "fakultet" in student_data:
+            set_parts.append("fakultet = %s")
+            params.append(student_data["fakultet"])
+        if "number_phone" in student_data:
+            set_parts.append("number_phone = %s")
+            params.append(student_data["number_phone"])
+        
+        if not set_parts:
+            return False
+            
+        # Преобразуем ID студентов в целые числа
+        student_ids = [int(id) for id in updated_ids]
+        
+        query = f"UPDATE students SET {', '.join(set_parts)} WHERE id = ANY(%s::int[])"
+        params.append(student_ids)
+        
+        if db.execute_query(query, params):
+            self.dataChanged.emit(
+                self.index(min(rows), 0),
+                self.index(max(rows), self.columnCount() - 1)
+            )
+            return True
+        return False
+
+    def remove_multiple_students(self, rows):
+        """Удаляет несколько студентов"""
+        if not rows:
+            return False
+        
+        student_ids = []
+        for row in sorted(rows, reverse=True):
+            if 0 <= row < len(self._students):
+                student_ids.append(int(self._students[row]["id"]))
+        
+        if not student_ids:
+            return False
+            
+        query = "DELETE FROM students WHERE id = ANY(%s::int[])"
+        if db.execute_query(query, (student_ids,)):
+            # Удаляем из модели
+            for row in sorted(rows, reverse=True):
+                if 0 <= row < len(self._students):
+                    self.beginRemoveRows(QModelIndex(), row, row)
+                    self._students.pop(row)
+                    self.endRemoveRows()
+            return True
+        return False
 
 
 # Модель для списка комнат
@@ -816,7 +908,7 @@ class AddEditStudentDialog(QDialog):
         
         # Добавляем валидатор для телефона
         phone_validator = QRegularExpressionValidator(
-            QRegularExpression(r"^\+?[\d\s\-()]{7,15}$"), self
+            QRegularExpression(r"^(\+?\d[\d\s\-()]{6,15})?$"), self  # Разрешаем пустую строку
         )
         self.phone_edit.setValidator(phone_validator)
 
@@ -1096,13 +1188,21 @@ class StudentsWidget(QWidget):
         button_layout = QHBoxLayout()
         add_button = AnimatedButton("Добавить студента")
         add_button.clicked.connect(self.add_student)
-        edit_button = AnimatedButton("Редактировать студента")
+        edit_button = AnimatedButton("Редактировать")
         edit_button.clicked.connect(self.edit_student)
-        delete_button = AnimatedButton("Удалить студента")
+        edit_multiple_button = AnimatedButton("Групповое редактирование")
+        edit_multiple_button.clicked.connect(self.edit_multiple_students)
+        delete_button = AnimatedButton("Удалить")
         delete_button.clicked.connect(self.delete_student)
+        delete_multiple_button = AnimatedButton("Групповое удаление")
+        delete_multiple_button.clicked.connect(self.delete_multiple_students)
+        
         button_layout.addWidget(add_button)
         button_layout.addWidget(edit_button)
+        button_layout.addWidget(edit_multiple_button)
         button_layout.addWidget(delete_button)
+        button_layout.addWidget(delete_multiple_button)
+        
         layout.addLayout(button_layout)
 
     def on_filter_changed(self, text):
@@ -1171,6 +1271,110 @@ class StudentsWidget(QWidget):
                 QMessageBox.information(self, "Успех", "Студент удалён.")
             else:
                 QMessageBox.warning(self, "Ошибка", "Не удалось удалить студента.")
+
+    def edit_multiple_students(self):
+        """Редактирование нескольких выбранных студентов"""
+        selection = self.table_view.selectionModel().selectedRows()
+        if len(selection) < 2:
+            QMessageBox.warning(self, "Ошибка", "Выберите несколько студентов для группового редактирования.")
+            return
+            
+        # Получаем список выбранных строк
+        rows = [self.proxy_model.mapToSource(index).row() for index in selection]
+        
+        # Создаем диалог для выбора полей для редактирования
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Групповое редактирование")
+        layout = QFormLayout(dialog)
+        
+        # Поля для редактирования
+        fields = {
+            "fio": ("ФИО", QLineEdit()),
+            "pol": ("Пол", QComboBox()),
+            "vozrast": ("Возраст", QSpinBox()),
+            "kurs": ("Курс", QSpinBox()),
+            "fakultet": ("Факультет", QLineEdit()),
+            "number_phone": ("Телефон", QLineEdit())
+        }
+        
+        # Настройка виджетов
+        fields["pol"][1].addItems(["М", "Ж"])
+        fields["vozrast"][1].setRange(16, 100)
+        fields["kurs"][1].setRange(1, 6)
+        
+        # Добавляем чекбоксы для выбора полей
+        checkboxes = {}
+        for key, (label, widget) in fields.items():
+            hbox = QHBoxLayout()
+            checkbox = QCheckBox("Изменить")
+            checkboxes[key] = checkbox
+            hbox.addWidget(checkbox)
+            hbox.addWidget(QLabel(label))
+            hbox.addWidget(widget)
+            layout.addRow(hbox)
+        
+        # Кнопки
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(dialog.accept)
+        button_box.rejected.connect(dialog.reject)
+        layout.addRow(button_box)
+        
+        if dialog.exec() == QDialog.Accepted:
+            # Собираем данные для обновления
+            update_data = {}
+            for key in fields:
+                if checkboxes[key].isChecked():
+                    widget = fields[key][1]
+                    if isinstance(widget, QLineEdit):
+                        update_data[key] = widget.text().strip()
+                    elif isinstance(widget, QComboBox):
+                        update_data[key] = widget.currentText()
+                    elif isinstance(widget, QSpinBox):
+                        update_data[key] = widget.value()
+            
+            if update_data:
+                if self.students_model.update_multiple_students(rows, update_data):
+                    QMessageBox.information(
+                        self, 
+                        "Успех", 
+                        f"Успешно обновлено {len(rows)} студентов."
+                    )
+                else:
+                    QMessageBox.warning(
+                        self, 
+                        "Ошибка", 
+                        "Не удалось обновить студентов."
+                    )
+    
+    def delete_multiple_students(self):
+        """Удаление нескольких выбранных студентов"""
+        selection = self.table_view.selectionModel().selectedRows()
+        if len(selection) < 2:
+            QMessageBox.warning(self, "Ошибка", "Выберите несколько студентов для группового удаления.")
+            return
+            
+        rows = [self.proxy_model.mapToSource(index).row() for index in selection]
+        
+        reply = QMessageBox.question(
+            self,
+            "Подтверждение",
+            f"Вы уверены, что хотите удалить {len(rows)} выбранных студентов?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        
+        if reply == QMessageBox.Yes:
+            if self.students_model.remove_multiple_students(rows):
+                QMessageBox.information(
+                    self, 
+                    "Успех", 
+                    f"Удалено {len(rows)} студентов."
+                )
+            else:
+                QMessageBox.warning(
+                    self, 
+                    "Ошибка", 
+                    "Не удалось удалить студентов."
+                )
 
 
 # Виджет для отображения списка комнат
