@@ -170,9 +170,10 @@ QLineEdit:focus, QComboBox:focus, QSpinBox:focus {
     border: 1px solid #3498db;
 }
 
-QTableView {
-    background-color: #ffffff;
-    gridline-color: #bdc3c7;
+QTableView::item:selected {
+    background: #3498db;  /* Ярко-синий */
+    color: white;         /* Белый текст */
+    border: none;
 }
 QHeaderView::section {
     background-color: #ecf0f1;
