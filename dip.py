@@ -1213,8 +1213,13 @@ class RequestsWidget(QWidget):
         has_selection = bool(selected)
 
         if has_selection:
-            row = selected[0].row()
-            status = self.requests_model.index(row, 2).data()
+            # Получаем индекс из прокси-модели и преобразуем его в индекс исходной модели
+            proxy_index = selected[0]
+            source_index = self.proxy_model.mapToSource(proxy_index)
+            
+            # Получаем статус заявки из исходной модели
+            status_index = self.requests_model.index(source_index.row(), 2)  # 2 - колонка статуса
+            status = self.requests_model.data(status_index, Qt.DisplayRole)
 
             # Настройка доступности кнопок в зависимости от текущего статуса
             self.process_btn.setEnabled(status == "Создана")
@@ -1224,7 +1229,7 @@ class RequestsWidget(QWidget):
             self.process_btn.setEnabled(False)
             self.approve_btn.setEnabled(False)
             self.reject_btn.setEnabled(False)
-
+            
     def process_request(self, new_status):
         """Обработка заявки (изменение статуса)"""
         selected = self.requests_table.selectionModel().selectedRows()
@@ -1595,7 +1600,7 @@ if __name__ == "__main__":
 
         # Добавляем тестовые данные, если таблицы пусты
         db.execute_query(
-            "INSERT INTO rooms (id, etazh, kol_mest, svobodno) VALUES (101, 1, 4, 4) ON CONFLICT (id) DO NOTHING"
+            "INSERT INTO rooms (id, etazh, kol_mest, svobodno) VALUES (101, 1, 3, 3) ON CONFLICT (id) DO NOTHING"
         )
         db.execute_query(
             "INSERT INTO rooms (id, etazh, kol_mest, svobodno) VALUES (102, 1, 3, 3) ON CONFLICT (id) DO NOTHING"
