@@ -1338,7 +1338,7 @@ class RoomsWidget(QWidget):
             "Данные обновлены. Выберите комнату для просмотра информации."
         )
         QMessageBox.information(self, "Обновление", "Данные о комнатах обновлены.")
-        
+
 # Виджет для работы с заявками
 class RequestsWidget(QWidget):
     def __init__(self, student_model, room_model):
@@ -1781,7 +1781,7 @@ class MainWindow(QMainWindow):
 
     def show_about(self):
         QMessageBox.information(
-            self, "О программе", "Система управления общежитием.\nВерсия 2.0\n© 2025"
+            self, "О программе", "Система управления общежитием.\nВерсия 2.1.1\n© 2025"
         )
 
     def show_logs(self):
