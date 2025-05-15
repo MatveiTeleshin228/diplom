@@ -1912,10 +1912,200 @@ class ReportsWidget(QWidget):
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
-        self.export_button = AnimatedButton("Выгрузить отчёт в Excel")
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(15)
+        
+        # Добавляем заголовок
+        title = QLabel("Статистика общежития")
+        title.setStyleSheet("""
+            QLabel {
+                font-size: 18px;
+                font-weight: bold;
+                color: #2c3e50;
+                padding: 10px 0;
+            }
+        """)
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+        
+        # Первая строка карточек
+        row1 = QHBoxLayout()
+        row1.setSpacing(10)
+        self.total_students_card = self._create_stat_card("Всего студентов", "Загрузка...")
+        self.total_rooms_card = self._create_stat_card("Всего комнат", "Загрузка...")
+        self.occupied_rooms_card = self._create_stat_card("Занято комнат", "Загрузка...")
+        self.free_rooms_card = self._create_stat_card("Свободно мест", "Загрузка...")
+        row1.addWidget(self.total_students_card)
+        row1.addWidget(self.total_rooms_card)
+        row1.addWidget(self.occupied_rooms_card)
+        row1.addWidget(self.free_rooms_card)
+        layout.addLayout(row1)
+        
+        # Вторая строка карточек
+        row2 = QHBoxLayout()
+        row2.setSpacing(10)
+        self.avg_age_card = self._create_stat_card("Средний возраст", "Загрузка...")
+        self.by_gender_card = self._create_stat_card("По полу", "Загрузка...")
+        self.by_course_card = self._create_stat_card("По курсам", "Загрузка...")
+        self.by_faculty_card = self._create_stat_card("По факультетам", "Загрузка...")
+        row2.addWidget(self.avg_age_card)
+        row2.addWidget(self.by_gender_card)
+        row2.addWidget(self.by_course_card)
+        row2.addWidget(self.by_faculty_card)
+        layout.addLayout(row2)
+        
+        # Кнопка экспорта
+        self.export_button = AnimatedButton("Выгрузить полный отчёт в Excel")
         self.export_button.clicked.connect(self.export_report)
-        layout.addWidget(self.export_button)
+        layout.addWidget(self.export_button, alignment=Qt.AlignCenter)
+        
         self.progress_dialog = None
+        
+        # Загружаем статистику сразу
+        self.load_statistics()
+
+    def _create_stat_card(self, title, value):
+        """Создает карточку для отображения статистики"""
+        card = QFrame()
+        card.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: 1px solid #d6d6d6;
+                border-radius: 8px;
+                padding: 10px;
+                min-width: 180px;
+                min-height: 80px;
+            }
+        """)
+        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(5)
+        
+        title_label = QLabel(title)
+        title_label.setStyleSheet("""
+            QLabel {
+                font-weight: bold;
+                color: #3498db;
+                font-size: 14px;
+            }
+        """)
+        title_label.setAlignment(Qt.AlignCenter)
+        
+        value_label = QLabel(value)
+        value_label.setObjectName("value_label")
+        value_label.setStyleSheet("""
+            QLabel {
+                font-size: 13px;
+                color: #2c3e50;
+            }
+        """)
+        value_label.setAlignment(Qt.AlignCenter)
+        value_label.setWordWrap(True)
+        
+        layout.addWidget(title_label)
+        layout.addWidget(value_label, stretch=1)
+        
+        return card
+
+    def load_statistics(self):
+        """Загружает статистические данные из базы"""
+        try:
+            # 1. Общее количество студентов
+            query = "SELECT COUNT(*) FROM students"
+            result = db.execute_query(query, fetch=True)
+            if result and result[0]:
+                count = result[0][0][0]
+                self._update_card(self.total_students_card, str(count))
+            
+            # 2. Общее количество комнат
+            query = "SELECT COUNT(*) FROM rooms"
+            result = db.execute_query(query, fetch=True)
+            if result and result[0]:
+                count = result[0][0][0]
+                self._update_card(self.total_rooms_card, str(count))
+            
+            # 3. Количество занятых комнат
+            query = """
+            SELECT COUNT(DISTINCT room_id) 
+            FROM students 
+            WHERE room_id IS NOT NULL
+            """
+            result = db.execute_query(query, fetch=True)
+            if result and result[0]:
+                count = result[0][0][0]
+                self._update_card(self.occupied_rooms_card, str(count))
+            
+            # 4. Количество свободных мест
+            query = "SELECT SUM(svobodno) FROM rooms"
+            result = db.execute_query(query, fetch=True)
+            if result and result[0]:
+                count = result[0][0][0] or 0
+                self._update_card(self.free_rooms_card, str(count))
+            
+            # 5. Средний возраст студентов
+            query = "SELECT ROUND(AVG(vozrast), 1) FROM students"
+            result = db.execute_query(query, fetch=True)
+            if result and result[0]:
+                avg = result[0][0][0]
+                self._update_card(self.avg_age_card, f"{avg} лет")
+            
+            # 6. Распределение по полу
+            query = """
+            SELECT pol, COUNT(*) 
+            FROM students 
+            GROUP BY pol 
+            ORDER BY pol
+            """
+            result = db.execute_query(query, fetch=True)
+            if result and result[0]:
+                gender_stats = {row[0]: row[1] for row in result[0]}
+                text = f"Мужчин: {gender_stats.get('М', 0)}\nЖенщин: {gender_stats.get('Ж', 0)}"
+                self._update_card(self.by_gender_card, text)
+            
+            # 7. Распределение по курсам
+            query = """
+            SELECT kurs, COUNT(*) 
+            FROM students 
+            GROUP BY kurs 
+            ORDER BY kurs
+            """
+            result = db.execute_query(query, fetch=True)
+            if result and result[0]:
+                text = "\n".join([f"{row[0]} курс: {row[1]}" for row in result[0]])
+                self._update_card(self.by_course_card, text)
+            
+            # 8. Распределение по факультетам (топ 3)
+            query = """
+            SELECT fakultet, COUNT(*) as count 
+            FROM students 
+            GROUP BY fakultet 
+            ORDER BY count DESC 
+            LIMIT 3
+            """
+            result = db.execute_query(query, fetch=True)
+            if result and result[0]:
+                text = "\n".join([f"{row[0]}: {row[1]}" for row in result[0]])
+                if len(result[0]) == 3:
+                    text += "\n..."
+                self._update_card(self.by_faculty_card, text)
+                
+        except Exception as e:
+            logging.error(f"Ошибка при загрузке статистики: {e}")
+            for card in [
+                self.total_students_card, self.total_rooms_card, 
+                self.occupied_rooms_card, self.free_rooms_card,
+                self.avg_age_card, self.by_gender_card, 
+                self.by_course_card, self.by_faculty_card
+            ]:
+                self._update_card(card, "Ошибка")
+
+    def _update_card(self, card, value):
+        """Обновляет значение в карточке статистики"""
+        value_label = card.findChild(QLabel, "value_label")
+        if value_label:
+            value_label.setText(str(value))
 
     def export_report(self):
         self.progress_dialog = QProgressDialog(
@@ -1945,8 +2135,7 @@ class ReportsWidget(QWidget):
     def report_error(self, error_msg):
         QMessageBox.critical(self, "Ошибка", f"Ошибка при выгрузке отчёта: {error_msg}")
         self.progress_dialog.close()
-
-
+        
 # Главное окно приложения
 class MainWindow(QMainWindow):
     def __init__(self):
