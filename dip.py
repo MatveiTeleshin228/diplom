@@ -562,7 +562,7 @@ class RoomsTableModel(QAbstractTableModel):
 
 # Модель для заявок
 class RequestsTableModel(QAbstractTableModel):
-    HEADERS = ["ID", "Тип заявки", "Статус", "Студент", "Комната"]
+    HEADERS = ["ID", "Тип заявки", "Статус", "Студент", "Комната", "Дата создания"]
     STATUS_VALUES = ["Создана", "В обработке", "Выполнена", "Отклонена"]
 
     def __init__(self):
@@ -572,7 +572,13 @@ class RequestsTableModel(QAbstractTableModel):
 
     def load_data(self):
         query = """
-        SELECT r.id, r.type, r.status, s.fio, r.room_id 
+        SELECT 
+            r.id, 
+            r.type, 
+            r.status, 
+            s.fio, 
+            r.room_id, 
+            (r.created_at AT TIME ZONE 'UTC' + INTERVAL '3 hours')::timestamp AS created_at
         FROM requests r
         JOIN students s ON r.student_id = s.id
         ORDER BY r.id DESC
@@ -588,6 +594,7 @@ class RequestsTableModel(QAbstractTableModel):
                     "status": row[2],
                     "student_fio": row[3],
                     "room_id": str(row[4]) if row[4] else "не указана",
+                    "created_at": row[5].strftime("%d.%m.%Y %H:%M") if row[5] else "не указана"
                 }
                 for row in result
             ]
@@ -596,7 +603,10 @@ class RequestsTableModel(QAbstractTableModel):
     def add_request(self, request_data):
         query = """
         INSERT INTO requests (type, status, student_id, room_id) 
-        VALUES (%s, %s, %s, %s) RETURNING id
+        VALUES (%s, %s, %s, %s) 
+        RETURNING 
+            id, 
+            (created_at AT TIME ZONE 'UTC' + INTERVAL '3 hours')::timestamp AS created_at
         """
         params = (
             request_data["type"],
@@ -610,9 +620,23 @@ class RequestsTableModel(QAbstractTableModel):
         )
         result = db.execute_query(query, params, fetch=True)
         if result:
-            # После добавления сразу обновляем данные с правильной сортировкой
-            self.load_data()
-            # Прокручиваем к верхней позиции (новой заявке)
+            request_data["id"] = str(result[0][0][0])
+            request_data["created_at"] = result[0][0][1].strftime("%d.%m.%Y %H:%M")
+
+            self._requests.insert(0, {
+                "id": request_data["id"],
+                "type": request_data["type"],
+                "status": request_data["status"],
+                "student_fio": request_data["student_fio"],
+                "room_id": request_data["room_id"],
+                "created_at": request_data["created_at"]
+            })
+            
+            # Используем beginResetModel/endResetModel для обновления всей таблицы
+            self.beginResetModel()
+            self.endResetModel()
+            
+            logging.info("Добавлена заявка: %s", request_data)
             return True
         return False
 
@@ -633,6 +657,7 @@ class RequestsTableModel(QAbstractTableModel):
                 request["status"],
                 request["student_fio"],
                 request["room_id"],
+                request["created_at"]  # Добавляем дату создания
             ][index.column()]
         return None
 
@@ -640,39 +665,6 @@ class RequestsTableModel(QAbstractTableModel):
         if orientation == Qt.Horizontal and role == Qt.DisplayRole:
             return self.HEADERS[section]
         return None
-
-    def add_request(self, request_data):
-        query = """
-        INSERT INTO requests (type, status, student_id, room_id) 
-        VALUES (%s, %s, %s, %s) RETURNING id
-        """
-        params = (
-            request_data["type"],
-            request_data["status"],
-            int(request_data["student_id"]),
-            (
-                int(request_data["room_id"])
-                if request_data["room_id"] != "не указана"
-                else None
-            ),
-        )
-        result = db.execute_query(query, params, fetch=True)
-        if result:
-            request_data["id"] = str(result[0][0][0])
-            self.beginInsertRows(QModelIndex(), self.rowCount(), self.rowCount())
-            self._requests.append(
-                {
-                    "id": request_data["id"],
-                    "type": request_data["type"],
-                    "status": request_data["status"],
-                    "student_fio": request_data["student_fio"],
-                    "room_id": request_data["room_id"],
-                }
-            )
-            self.endInsertRows()
-            logging.info("Добавлена заявка: %s", request_data)
-            return True
-        return False
 
     def update_request_status(self, request_id, new_status):
         """Обновление статуса заявки с проверкой подключения и транзакцией"""
