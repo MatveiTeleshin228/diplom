@@ -18,7 +18,7 @@ from PySide6.QtCore import (
     QRegularExpression,
     QSortFilterProxyModel,
 )
-from PySide6.QtGui import QFont, QAction, QRegularExpressionValidator
+from PySide6.QtGui import QFont, QAction, QRegularExpressionValidator, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -2206,6 +2206,7 @@ class MainWindow(QMainWindow):
         self._create_tabs()
         self._create_menu()
         self.setStyleSheet(APP_QSS)
+        self.setWindowIcon(QIcon('app_icon.ico'))
         # Связываем обновление студентов при изменении заявок
         self.requests_tab.requests_model.dataChanged.connect(self._update_students_view)
 
