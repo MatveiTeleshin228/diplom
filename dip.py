@@ -2239,13 +2239,24 @@ class MainWindow(QMainWindow):
         msg.setText(tutorial_text)
         msg.setIcon(QMessageBox.Information)
         msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()
+        msg.exec()
 
     def show_about(self):
-        QMessageBox.information(
-            self, "О программе", "Система управления общежитием.\nВерсия 2.1.1\n© 2025"
-        )
-
+        about_text = """
+        <h2>Система управления общежитием</h2>
+        <p>Версия 2.1.1</p>
+        <p>© 2025 Университет</p>
+        <p>Для получения помощи воспользуйтесь разделом <b>"Руководство пользователя"</b> в меню Справка.</p>
+        <p>При возникновении проблем просмотрите логи (меню Файл → Просмотр логов).</p>
+        """
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("О программе")
+        msg.setTextFormat(Qt.RichText)
+        msg.setText(about_text)
+        msg.setIcon(QMessageBox.Information)
+        msg.exec()
+        
     def show_logs(self):
         dlg = LogViewerDialog(self)
         dlg.exec()
