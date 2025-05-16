@@ -2190,9 +2190,56 @@ class MainWindow(QMainWindow):
         file_menu.addAction(logs_action)
 
         help_menu = menu_bar.addMenu("Справка")
+        
+        # Добавляем новый пункт меню с туториалом
+        tutorial_action = QAction("Руководство пользователя", self)
+        tutorial_action.triggered.connect(self.show_tutorial)
+        help_menu.addAction(tutorial_action)
+        
+        # Добавляем разделитель
+        help_menu.addSeparator()
+        
         about_action = QAction("О программе", self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
+
+    # Добавим новый метод для показа туториала
+    def show_tutorial(self):
+        tutorial_text = """
+        <h2>Руководство пользователя</h2>
+        
+        <h3>Основные разделы:</h3>
+        <ul>
+            <li><b>Студенты</b> - управление списком проживающих</li>
+            <li><b>Комнаты</b> - просмотр информации о комнатах и их заселенности</li>
+            <li><b>Заявки</b> - обработка заявок на заселение/выселение</li>
+            <li><b>Отчётность</b> - статистика и выгрузка данных</li>
+        </ul>
+        
+        <h3>Быстрые подсказки:</h3>
+        <ol>
+            <li>Для добавления студента нажмите кнопку "Добавить студента"</li>
+            <li>Чтобы создать заявку, выберите соответствующую кнопку в разделе "Заявки"</li>
+            <li>Статус заявки можно изменить кнопками "В обработку", "Одобрить" или "Отклонить"</li>
+            <li>Для поиска используйте поле фильтра в каждом разделе</li>
+            <li>Обновить данные можно кнопкой "Обновить" в каждом разделе</li>
+        </ol>
+        
+        <h3>Частые вопросы:</h3>
+        <p><b>Q:</b> Как заселить студента?</p>
+        <p><b>A:</b> 1) Убедитесь, что студент добавлен в систему. 2) В разделе "Заявки" создайте заявку на заселение. 3) Одобрите заявку.</p>
+        
+        <p><b>Q:</b> Почему не отображаются комнаты?</p>
+        <p><b>A:</b> Проверьте подключение к базе данных (кнопка внизу раздела "Заявки").</p>
+        """
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Руководство пользователя")
+        msg.setTextFormat(Qt.RichText)
+        msg.setText(tutorial_text)
+        msg.setIcon(QMessageBox.Information)
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
 
     def show_about(self):
         QMessageBox.information(
