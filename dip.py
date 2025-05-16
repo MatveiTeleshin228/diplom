@@ -247,23 +247,21 @@ class LogViewerDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Просмотр логов")
-        self.resize(800, 600)  # Увеличим размер окна
+        self.resize(800, 600)
         layout = QVBoxLayout(self)
         
-        # Добавляем поясняющий текст
-        info_label = QLabel("Содержимое лог-файла app.log:")
+        info_label = QLabel("Содержимое лог-файла app.log (новые записи вверху):")
         layout.addWidget(info_label)
         
         self.text_edit = QPlainTextEdit(self)
         self.text_edit.setReadOnly(True)
-        self.text_edit.setFont(QFont("Courier New", 10))  # Моноширинный шрифт для логов
+        self.text_edit.setFont(QFont("Courier New", 10))
         layout.addWidget(self.text_edit)
         
         button_layout = QHBoxLayout()
         refresh_button = AnimatedButton("Обновить")
         refresh_button.clicked.connect(self.load_logs)
         
-        # Кнопка очистки логов
         clear_button = AnimatedButton("Очистить логи")
         clear_button.clicked.connect(self.clear_logs)
         clear_button.setStyleSheet("background-color: #e74c3c;")
@@ -276,22 +274,25 @@ class LogViewerDialog(QDialog):
 
     def load_logs(self):
         try:
-            # Пробуем разные кодировки по очереди
             encodings = ['utf-8', 'cp1251', 'iso-8859-1', 'utf-16']
             
             for encoding in encodings:
                 try:
                     with open("app.log", "r", encoding=encoding) as f:
-                        content = f.read()
+                        lines = f.readlines()
+                        # Реверсируем порядок строк - новые будут вверху
+                        lines.reverse()
+                        content = "".join(lines)
                         self.text_edit.setPlainText(content)
                         return
                 except UnicodeDecodeError:
                     continue
                     
-            # Если ни одна кодировка не подошла, читаем как бинарный файл
             with open("app.log", "rb") as f:
                 content = f.read().decode('utf-8', errors='replace')
-                self.text_edit.setPlainText(content)
+                lines = content.split('\n')
+                lines.reverse()
+                self.text_edit.setPlainText("\n".join(lines))
                 
         except FileNotFoundError:
             self.text_edit.setPlainText("Лог-файл не найден. Он будет создан автоматически при следующем событии логирования.")
@@ -315,7 +316,7 @@ class LogViewerDialog(QDialog):
                 QMessageBox.information(self, "Успех", "Файл логов успешно очищен.")
             except Exception as e:
                 QMessageBox.warning(self, "Ошибка", f"Не удалось очистить логи: {str(e)}")
-
+                
 # Модель для списка студентов
 class StudentsTableModel(QAbstractTableModel):
     HEADERS = ["ID", "ФИО", "Пол", "Возраст", "Курс", "Факультет", "Телефон", "Комната"]  # Добавлен столбец "Телефон"
