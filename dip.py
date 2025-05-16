@@ -247,23 +247,74 @@ class LogViewerDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Просмотр логов")
-        self.resize(600, 400)
+        self.resize(800, 600)  # Увеличим размер окна
         layout = QVBoxLayout(self)
+        
+        # Добавляем поясняющий текст
+        info_label = QLabel("Содержимое лог-файла app.log:")
+        layout.addWidget(info_label)
+        
         self.text_edit = QPlainTextEdit(self)
         self.text_edit.setReadOnly(True)
+        self.text_edit.setFont(QFont("Courier New", 10))  # Моноширинный шрифт для логов
         layout.addWidget(self.text_edit)
-        refresh_button = QPushButton("Обновить")
+        
+        button_layout = QHBoxLayout()
+        refresh_button = AnimatedButton("Обновить")
         refresh_button.clicked.connect(self.load_logs)
-        layout.addWidget(refresh_button)
+        
+        # Кнопка очистки логов
+        clear_button = AnimatedButton("Очистить логи")
+        clear_button.clicked.connect(self.clear_logs)
+        clear_button.setStyleSheet("background-color: #e74c3c;")
+        
+        button_layout.addWidget(refresh_button)
+        button_layout.addWidget(clear_button)
+        layout.addLayout(button_layout)
+        
         self.load_logs()
 
     def load_logs(self):
         try:
-            with open("app.log", "r", encoding="utf-8") as f:
-                self.text_edit.setPlainText(f.read())
+            # Пробуем разные кодировки по очереди
+            encodings = ['utf-8', 'cp1251', 'iso-8859-1', 'utf-16']
+            
+            for encoding in encodings:
+                try:
+                    with open("app.log", "r", encoding=encoding) as f:
+                        content = f.read()
+                        self.text_edit.setPlainText(content)
+                        return
+                except UnicodeDecodeError:
+                    continue
+                    
+            # Если ни одна кодировка не подошла, читаем как бинарный файл
+            with open("app.log", "rb") as f:
+                content = f.read().decode('utf-8', errors='replace')
+                self.text_edit.setPlainText(content)
+                
+        except FileNotFoundError:
+            self.text_edit.setPlainText("Лог-файл не найден. Он будет создан автоматически при следующем событии логирования.")
         except Exception as e:
-            self.text_edit.setPlainText("Ошибка чтения лог файла: " + str(e))
+            self.text_edit.setPlainText(f"Ошибка чтения лог-файла: {str(e)}\n\nПопробуйте очистить логи или проверьте права доступа к файлу.")
 
+    def clear_logs(self):
+        reply = QMessageBox.question(
+            self,
+            "Очистка логов",
+            "Вы уверены, что хотите очистить файл логов?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            try:
+                with open("app.log", "w", encoding='utf-8') as f:
+                    f.write("")
+                self.load_logs()
+                QMessageBox.information(self, "Успех", "Файл логов успешно очищен.")
+            except Exception as e:
+                QMessageBox.warning(self, "Ошибка", f"Не удалось очистить логи: {str(e)}")
 
 # Модель для списка студентов
 class StudentsTableModel(QAbstractTableModel):
