@@ -1915,6 +1915,14 @@ class ReportsWidget(QWidget):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(15)
         
+        # Добавляем строку с кнопкой обновления
+        refresh_layout = QHBoxLayout()
+        self.refresh_button = AnimatedButton("Обновить статистику")
+        self.refresh_button.clicked.connect(self.load_statistics)
+        refresh_layout.addWidget(self.refresh_button)
+        refresh_layout.addStretch()
+        layout.addLayout(refresh_layout)
+        
         # Добавляем заголовок
         title = QLabel("Статистика общежития")
         title.setStyleSheet("""
@@ -1928,6 +1936,7 @@ class ReportsWidget(QWidget):
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
         
+        # Остальной код остается без изменений...
         # Первая строка карточек
         row1 = QHBoxLayout()
         row1.setSpacing(10)
@@ -1963,7 +1972,7 @@ class ReportsWidget(QWidget):
         
         # Загружаем статистику сразу
         self.load_statistics()
-
+        
     def _create_stat_card(self, title, value):
         """Создает карточку для отображения статистики"""
         card = QFrame()
