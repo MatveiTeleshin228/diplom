@@ -11,7 +11,6 @@ from dip import StudentsTableModel, RoomsTableModel
 class TestRoomsTableModel(unittest.TestCase):
     @patch('dip.db.execute_query')
     def setUp(self, mock_execute):
-        # Мокаем первый вызов для load_data
         mock_execute.return_value = (
             [(101, 1, 3, 2), (102, 1, 3, 3)],
             ['id', 'etazh', 'kol_mest', 'svobodno']
@@ -21,15 +20,10 @@ class TestRoomsTableModel(unittest.TestCase):
 
     @patch('dip.db.execute_query')
     def test_update_availability(self, mock_update):
-        # Настраиваем mock для update_room_availability
         mock_update.return_value = True
         
-        # Мокаем load_data, чтобы он не вызывал реальный запрос
         with patch.object(self.model, 'load_data'):
-            # Вызываем тестируемый метод
             result = self.model.update_room_availability('101', -1)
-            
-            # Проверяем результат
             self.assertTrue(result)
             mock_update.assert_called_once_with(
                 "UPDATE rooms SET svobodno = svobodno + %s WHERE id = %s", 
@@ -53,7 +47,7 @@ class TestStudentsTableModel(unittest.TestCase):
         self.assertEqual(self.model.columnCount(), 8)
 
     def test_data_display(self):
-        index = self.model.index(0, 1)  # Колонка с ФИО
+        index = self.model.index(0, 1)
         self.assertEqual(self.model.data(index, Qt.DisplayRole), 'Иванов Иван')
 
     @patch('dip.db.execute_query')
@@ -64,3 +58,27 @@ class TestStudentsTableModel(unittest.TestCase):
             'kurs': 3, 'fakultet': 'ФИТ', 'number_phone': '456'
         }
         self.assertTrue(self.model.add_student(student))
+
+    @patch('dip.db.execute_query')
+    def test_remove_student_success(self, mock_exec):
+        mock_exec.return_value = True
+        with patch.object(self.model, 'can_delete_student', return_value=True):
+            self.assertTrue(self.model.remove_student(0))
+            self.assertEqual(self.model.rowCount(), 0)
+
+    @patch('dip.db.execute_query')
+    def test_remove_student_fail_if_in_room(self, mock_exec):
+        with patch.object(self.model, 'can_delete_student', return_value=False):
+            self.assertFalse(self.model.remove_student(0))
+            self.assertEqual(self.model.rowCount(), 1)
+
+    @patch('dip.db.execute_query')
+    def test_remove_multiple_students(self, mock_exec):
+        mock_exec.return_value = True
+        self.model._students.append({
+            "id": "2", "fio": "Петров Пётр", "pol": "М", "vozrast": 21,
+            "kurs": 3, "fakultet": "ФИТ", "room_id": None
+        })
+        with patch.object(self.model, 'can_delete_student', return_value=True):
+            self.assertTrue(self.model.remove_multiple_students([0, 1]))
+            self.assertEqual(self.model.rowCount(), 0)
