@@ -2320,58 +2320,6 @@ class MainWindow(QMainWindow):
 
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    default_font = QFont("Segoe UI", 10)
-    app.setFont(default_font)
-
-    # Проверка подключения к базе данных
-    try:
-        # Создаем таблицы, если они не существуют
-        create_tables_query = """
-        CREATE TABLE IF NOT EXISTS students (
-            id SERIAL PRIMARY KEY,
-            fio VARCHAR(100) NOT NULL,
-            pol VARCHAR(1) NOT NULL,
-            vozrast INTEGER NOT NULL,
-            kurs INTEGER NOT NULL,
-            fakultet VARCHAR(50) NOT NULL,
-            number_phone VARCHAR(20),
-            room_id INTEGER REFERENCES rooms(id)
-        );
-        
-        CREATE TABLE IF NOT EXISTS rooms (
-            id INTEGER PRIMARY KEY,
-            etazh INTEGER NOT NULL,
-            kol_mest INTEGER NOT NULL,
-            svobodno INTEGER NOT NULL
-        );
-        
-        CREATE TABLE IF NOT EXISTS requests (
-            id SERIAL PRIMARY KEY,
-            type VARCHAR(20) NOT NULL,
-            status VARCHAR(20) NOT NULL,
-            student_id INTEGER REFERENCES students(id),
-            room_id INTEGER REFERENCES rooms(id)
-        );
-        """
-        db.execute_query(create_tables_query)
-
-        # Добавляем тестовые данные, если таблицы пусты
-        db.execute_query(
-            "INSERT INTO rooms (id, etazh, kol_mest, svobodno) VALUES (101, 1, 3, 3) ON CONFLICT (id) DO NOTHING"
-        )
-        db.execute_query(
-            "INSERT INTO rooms (id, etazh, kol_mest, svobodno) VALUES (102, 1, 3, 3) ON CONFLICT (id) DO NOTHING"
-        )
-
-        window = MainWindow()
-        window.show()
-        sys.exit(app.exec())
-    except Exception as e:
-        logging.error(f"Ошибка инициализации базы данных: {e}")
-        QMessageBox.critical(
-            None,
-            "Критическая ошибка",
-            f"Не удалось подключиться к базе данных: {str(e)}",
-        )
-        sys.exit(1)
+    # Этот блок должен быть ПУСТЫМ
+    # Вся инициализация будет через launcher.py
+    pass

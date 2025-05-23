@@ -793,3 +793,295 @@ psycopg2.OperationalError: invalid port number: "6543111"
 2025-05-18 23:27:52,245 INFO: Успешное подключение к базе данных
 2025-05-18 23:27:52,613 INFO: Успешное подключение к базе данных
 2025-05-18 23:27:52,993 INFO: Добавлен студент ID 2: {'fio': 'Петров Петр', 'pol': 'М', 'vozrast': 21, 'kurs': 3, 'fakultet': 'ФИТ', 'number_phone': '456', 'id': '2', 'room_id': 'еще не заселен'}
+2025-05-23 21:02:30,035 INFO: Успешное подключение к базе данных
+2025-05-23 21:02:48,812 INFO: Соединение с базой данных закрыто
+2025-05-23 21:03:18,394 ERROR: Ошибка подключения к базе данных: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 21:03:18,394 ERROR: Неперехваченное исключение
+Traceback (most recent call last):
+  File "d:\hgjfk\ура\diplom\dip.py", line 127, in <module>
+    db = Database()
+         ^^^^^^^^^^
+  File "d:\hgjfk\ура\diplom\dip.py", line 76, in __init__
+    self.connect()
+  File "d:\hgjfk\ура\diplom\dip.py", line 80, in connect
+    self.connection = psycopg2.connect(
+                      ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Acer\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 21:03:34,031 ERROR: Ошибка подключения к базе данных: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 21:03:34,031 ERROR: Неперехваченное исключение
+Traceback (most recent call last):
+  File "d:\hgjfk\ура\diplom\dip.py", line 127, in <module>
+    db = Database()
+         ^^^^^^^^^^
+  File "d:\hgjfk\ура\diplom\dip.py", line 76, in __init__
+    self.connect()
+  File "d:\hgjfk\ура\diplom\dip.py", line 80, in connect
+    self.connection = psycopg2.connect(
+                      ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Acer\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 21:20:23,462 INFO: Успешное подключение к базе данных
+2025-05-23 21:20:46,133 INFO: Соединение с базой данных закрыто
+2025-05-23 21:21:09,323 ERROR: Ошибка подключения к базе данных: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 21:21:09,326 ERROR: Неперехваченное исключение
+Traceback (most recent call last):
+  File "d:\hgjfk\ура\diplom\dip.py", line 127, in <module>
+    db = Database()
+         ^^^^^^^^^^
+  File "d:\hgjfk\ура\diplom\dip.py", line 76, in __init__
+    self.connect()
+  File "d:\hgjfk\ура\diplom\dip.py", line 80, in connect
+    self.connection = psycopg2.connect(
+                      ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Acer\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 21:29:54,456 INFO: Успешное подключение к базе данных
+2025-05-23 21:29:55,360 INFO: Успешное подключение к базе данных
+2025-05-23 21:30:03,069 INFO: Соединение с базой данных закрыто
+2025-05-23 21:30:24,698 ERROR: Ошибка подключения к базе данных: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 21:30:24,701 ERROR: Неперехваченное исключение
+Traceback (most recent call last):
+  File "d:\hgjfk\ура\diplom\dip.py", line 127, in <module>
+    db = Database()
+         ^^^^^^^^^^
+  File "d:\hgjfk\ура\diplom\dip.py", line 76, in __init__
+    self.connect()
+  File "d:\hgjfk\ура\diplom\dip.py", line 80, in connect
+    self.connection = psycopg2.connect(
+                      ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Acer\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 21:35:01,903 INFO: Успешное подключение к базе данных
+2025-05-23 21:35:03,136 INFO: Успешное подключение к базе данных
+2025-05-23 21:35:42,411 INFO: Добавлен студент ID 32: {'fio': 'Анастасия', 'pol': 'Ж', 'vozrast': 20, 'kurs': 3, 'fakultet': 'АВо', 'number_phone': '', 'id': '32', 'room_id': 'еще не заселен'}
+2025-05-23 21:35:59,120 INFO: Добавлена заявка: {'type': 'Заселение', 'status': 'Создана', 'student_id': '32', 'student_fio': 'Анастасия', 'room_id': '101', 'id': '53', 'created_at': '23.05.2025 21:35'}
+2025-05-23 21:36:16,016 INFO: Соединение с базой данных закрыто
+2025-05-23 21:36:48,266 ERROR: Неизвестная ошибка при подключении: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 21:36:48,267 ERROR: Попытка подключения 1 не удалась: Произошла непредвиденная ошибка при подключении.
+2025-05-23 21:36:50,268 ERROR: Неизвестная ошибка при подключении: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 21:36:50,269 ERROR: Попытка подключения 2 не удалась: Произошла непредвиденная ошибка при подключении.
+2025-05-23 21:36:52,270 ERROR: Неизвестная ошибка при подключении: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 21:36:52,271 ERROR: Попытка подключения 3 не удалась: Произошла непредвиденная ошибка при подключении.
+2025-05-23 21:36:52,272 ERROR: Неперехваченное исключение
+Traceback (most recent call last):
+  File "d:\hgjfk\ура\diplom\dip.py", line 103, in connect
+    self.connection = psycopg2.connect(dsn)
+                      ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Acer\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "d:\hgjfk\ура\diplom\dip.py", line 106, in connect
+    self.connection = psycopg2.connect(dsn.encode('ascii').decode('utf-8', 'ignore'))
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Acer\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "d:\hgjfk\ура\diplom\dip.py", line 162, in <module>
+    db = Database()
+         ^^^^^^^^^^
+  File "d:\hgjfk\ура\diplom\dip.py", line 75, in __init__
+    self._connect_with_retry()
+  File "d:\hgjfk\ура\diplom\dip.py", line 80, in _connect_with_retry
+    self.connect()
+  File "d:\hgjfk\ура\diplom\dip.py", line 124, in connect
+    raise RuntimeError("Произошла непредвиденная ошибка при подключении.")
+RuntimeError: Произошла непредвиденная ошибка при подключении.
+2025-05-23 21:44:34,366 INFO: Успешное подключение к базе данных
+2025-05-23 21:44:35,176 INFO: Успешное подключение к базе данных
+2025-05-23 21:45:03,120 INFO: Соединение с базой данных закрыто
+2025-05-23 21:45:22,589 ERROR: Ошибка подключения к базе данных: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 21:45:22,589 ERROR: Неперехваченное исключение
+Traceback (most recent call last):
+  File "d:\hgjfk\ура\diplom\dip.py", line 128, in <module>
+    db = Database()
+         ^^^^^^^^^^
+  File "d:\hgjfk\ура\diplom\dip.py", line 77, in __init__
+    self.connect()
+  File "d:\hgjfk\ура\diplom\dip.py", line 81, in connect
+    self.connection = psycopg2.connect(
+                      ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Acer\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 21:49:25,755 INFO: Успешное подключение к базе данных
+2025-05-23 21:49:33,323 INFO: Соединение с базой данных закрыто
+2025-05-23 21:49:52,103 ERROR: Ошибка подключения к базе данных: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 21:49:52,105 ERROR: Неперехваченное исключение
+Traceback (most recent call last):
+  File "d:\hgjfk\ура\diplom\dip.py", line 128, in <module>
+    db = Database()
+         ^^^^^^^^^^
+  File "d:\hgjfk\ура\diplom\dip.py", line 77, in __init__
+    self.connect()
+  File "d:\hgjfk\ура\diplom\dip.py", line 81, in connect
+    self.connection = psycopg2.connect(
+                      ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Acer\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 21:50:06,064 ERROR: Ошибка подключения к базе данных: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 21:50:06,067 ERROR: Неперехваченное исключение
+Traceback (most recent call last):
+  File "d:\hgjfk\ура\diplom\dip.py", line 128, in <module>
+    db = Database()
+         ^^^^^^^^^^
+  File "d:\hgjfk\ура\diplom\dip.py", line 77, in __init__
+    self.connect()
+  File "d:\hgjfk\ура\diplom\dip.py", line 81, in connect
+    self.connection = psycopg2.connect(
+                      ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Acer\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 21:56:53,426 INFO: Успешное подключение к базе данных
+2025-05-23 21:57:36,724 INFO: Соединение с базой данных закрыто
+2025-05-23 21:58:04,319 ERROR: Ошибка подключения к базе данных: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 21:58:04,324 ERROR: Неперехваченное исключение
+Traceback (most recent call last):
+  File "d:\hgjfk\ура\diplom\dip.py", line 127, in <module>
+    db = Database()
+         ^^^^^^^^^^
+  File "d:\hgjfk\ура\diplom\dip.py", line 76, in __init__
+    self.connect()
+  File "d:\hgjfk\ура\diplom\dip.py", line 80, in connect
+    self.connection = psycopg2.connect(
+                      ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Acer\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 22:03:53,155 INFO: Успешное подключение к базе данных
+2025-05-23 22:03:53,906 INFO: Успешное подключение к базе данных
+2025-05-23 22:04:18,945 INFO: Добавлена заявка: {'type': 'Выселение', 'status': 'Создана', 'student_id': '32', 'student_fio': 'Анастасия', 'room_id': 101, 'id': '54', 'created_at': '23.05.2025 22:04'}
+2025-05-23 22:04:22,909 INFO: Соединение с базой данных закрыто
+2025-05-23 22:04:41,695 ERROR: Ошибка подключения к базе данных: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 22:04:41,695 ERROR: Неперехваченное исключение
+Traceback (most recent call last):
+  File "d:\hgjfk\ура\diplom\dip.py", line 151, in <module>
+    db = Database()
+         ^^^^^^^^^^
+  File "d:\hgjfk\ура\diplom\dip.py", line 96, in __init__
+    self.connect()
+  File "d:\hgjfk\ура\diplom\dip.py", line 111, in connect
+    self.connection = psycopg2.connect(**conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Acer\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 22:09:02,238 INFO: Успешное подключение к базе данных
+2025-05-23 22:09:03,015 INFO: Успешное подключение к базе данных
+2025-05-23 22:09:54,933 INFO: Соединение с базой данных закрыто
+2025-05-23 22:10:15,316 ERROR: Ошибка подключения к базе данных: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 22:10:15,316 ERROR: Неперехваченное исключение
+Traceback (most recent call last):
+  File "d:\hgjfk\ура\diplom\dip.py", line 142, in <module>
+    db = Database()
+         ^^^^^^^^^^
+  File "d:\hgjfk\ура\diplom\dip.py", line 87, in __init__
+    self.connect()
+  File "d:\hgjfk\ура\diplom\dip.py", line 102, in connect
+    self.connection = psycopg2.connect(**conn_params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Acer\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 22:14:23,179 INFO: Успешное подключение к базе данных
+2025-05-23 22:14:58,023 INFO: Добавлен студент ID 33: {'fio': 'Иван Лыков', 'pol': 'М', 'vozrast': 18, 'kurs': 1, 'fakultet': 'ПРО', 'number_phone': '', 'id': '33', 'room_id': 'еще не заселен'}
+2025-05-23 22:15:02,855 INFO: Соединение с базой данных закрыто
+2025-05-23 22:15:32,373 ERROR: Ошибка подключения к базе данных: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 22:15:32,378 ERROR: Неперехваченное исключение
+Traceback (most recent call last):
+  File "d:\hgjfk\ура\diplom\dip.py", line 125, in <module>
+    db = Database()
+         ^^^^^^^^^^
+  File "d:\hgjfk\ура\diplom\dip.py", line 74, in __init__
+    self.connect()
+  File "d:\hgjfk\ура\diplom\dip.py", line 78, in connect
+    self.connection = psycopg2.connect(
+                      ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Acer\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 22:16:02,881 ERROR: Ошибка подключения к базе данных: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 22:24:25,847 INFO: Успешное подключение к базе данных
+2025-05-23 22:24:47,737 INFO: Обновлен студент в строке 8: {'fio': 'Иван Лыков', 'pol': 'М', 'vozrast': 22, 'kurs': 1, 'fakultet': 'ПРО', 'number_phone': 'не указан', 'id': '33', 'room_id': 'еще не заселен'}
+2025-05-23 22:24:56,728 INFO: Соединение с базой данных закрыто
+2025-05-23 22:25:34,436 ERROR: Ошибка подключения к базе данных: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 22:25:34,438 ERROR: Неперехваченное исключение
+Traceback (most recent call last):
+  File "d:\hgjfk\ура\diplom\dip.py", line 125, in <module>
+    db = Database()
+         ^^^^^^^^^^
+  File "d:\hgjfk\ура\diplom\dip.py", line 74, in __init__
+    self.connect()
+  File "d:\hgjfk\ура\diplom\dip.py", line 78, in connect
+    self.connection = psycopg2.connect(
+                      ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Acer\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 22:26:23,761 INFO: Успешное подключение к базе данных
+2025-05-23 22:26:34,291 INFO: Соединение с базой данных закрыто
+2025-05-23 22:28:06,505 INFO: Успешное подключение к базе данных
+2025-05-23 22:28:06,973 INFO: Успешное подключение к базе данных
+2025-05-23 22:28:39,998 INFO: Соединение с базой данных закрыто
+2025-05-23 22:29:03,268 ERROR: Ошибка подключения к базе данных: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 22:29:03,268 ERROR: Неперехваченное исключение
+Traceback (most recent call last):
+  File "d:\hgjfk\ура\diplom\dip.py", line 125, in <module>
+    db = Database()
+         ^^^^^^^^^^
+  File "d:\hgjfk\ура\diplom\dip.py", line 74, in __init__
+    self.connect()
+  File "d:\hgjfk\ура\diplom\dip.py", line 78, in connect
+    self.connection = psycopg2.connect(
+                      ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Acer\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 22:29:45,538 ERROR: Ошибка подключения к базе данных: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 22:29:45,539 ERROR: Неперехваченное исключение
+Traceback (most recent call last):
+  File "D:\hgjfk\ура\diplom\dip.py", line 125, in <module>
+    db = Database()
+         ^^^^^^^^^^
+  File "D:\hgjfk\ура\diplom\dip.py", line 74, in __init__
+    self.connect()
+  File "D:\hgjfk\ура\diplom\dip.py", line 78, in connect
+    self.connection = psycopg2.connect(
+                      ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Acer\AppData\Local\Programs\Python\Python312\Lib\site-packages\psycopg2\__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xdd in position 81: invalid continuation byte
+2025-05-23 22:33:31,372 INFO: Успешное подключение к базе данных
+2025-05-23 22:33:39,711 INFO: Соединение с базой данных закрыто
+2025-05-23 22:34:17,506 INFO: Успешное подключение к базе данных
+2025-05-23 22:34:32,756 INFO: Соединение с базой данных закрыто
