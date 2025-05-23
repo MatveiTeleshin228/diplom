@@ -1,6 +1,8 @@
 import sys
 import socket
 from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtGui import QFont, QAction, QRegularExpressionValidator, QIcon
+
 
 def is_internet_available():
     """Проверяет интернет без зависимостей от БД"""
@@ -26,7 +28,7 @@ def main():
     
     # 2. Только если интернет есть - импортируем и запускаем основное приложение
     from dip import MainWindow
-    
+
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()

@@ -459,6 +459,12 @@ class StudentsTableModel(QAbstractTableModel):
     def remove_student(self, row):
         if 0 <= row < len(self._students):
             student_id = int(self._students[row]["id"])
+            
+            # Проверяем возможность удаления
+            if not self.can_delete_student(student_id):
+                logging.warning(f"Попытка удалить студента с активными заявками или заселением: ID {student_id}")
+                return False
+
             query = "DELETE FROM students WHERE id = %s"
             if db.execute_query(query, (student_id,)):
                 self.beginRemoveRows(QModelIndex(), row, row)
@@ -472,7 +478,32 @@ class StudentsTableModel(QAbstractTableModel):
         if 0 <= row < len(self._students):
             return self._students[row]
         return None
+    
+    def can_delete_student(self, student_id):
+        """Проверяет, можно ли удалить студента (нет заселения и активных заявок)"""
+        try:
+            # Проверяем, заселен ли студент
+            query = "SELECT room_id FROM students WHERE id = %s"
+            result = db.execute_query(query, (student_id,), fetch=True)
+            if result and result[0] and result[0][0][0]:  # Если room_id не NULL
+                return False
 
+            # Проверяем активные заявки
+            query = """
+            SELECT COUNT(*) 
+            FROM requests 
+            WHERE student_id = %s 
+            AND status IN ('Создана', 'В обработке')
+            """
+            result = db.execute_query(query, (student_id,), fetch=True)
+            if result and result[0] and result[0][0][0] > 0:
+                return False
+
+            return True
+        except Exception as e:
+            logging.error(f"Ошибка проверки возможности удаления студента: {e}")
+            return False
+    
     def update_multiple_students(self, rows, student_data):
         """Обновляет несколько студентов"""
         if not rows:
@@ -540,7 +571,11 @@ class StudentsTableModel(QAbstractTableModel):
         student_ids = []
         for row in sorted(rows, reverse=True):
             if 0 <= row < len(self._students):
-                student_ids.append(int(self._students[row]["id"]))
+                student_id = int(self._students[row]["id"])
+                if self.can_delete_student(student_id):  # Проверяем каждого студента
+                    student_ids.append(student_id)
+                else:
+                    logging.warning(f"Студент ID {student_id} не может быть удален (есть заселение или активные заявки)")
         
         if not student_ids:
             return False
@@ -550,12 +585,13 @@ class StudentsTableModel(QAbstractTableModel):
             # Удаляем из модели
             for row in sorted(rows, reverse=True):
                 if 0 <= row < len(self._students):
-                    self.beginRemoveRows(QModelIndex(), row, row)
-                    self._students.pop(row)
-                    self.endRemoveRows()
+                    student_id = int(self._students[row]["id"])
+                    if student_id in student_ids:  # Удаляем только тех, кого можно
+                        self.beginRemoveRows(QModelIndex(), row, row)
+                        self._students.pop(row)
+                        self.endRemoveRows()
             return True
         return False
-
 
 # Модель для списка комнат
 class RoomsTableModel(QAbstractTableModel):
@@ -1303,6 +1339,19 @@ class StudentsWidget(QWidget):
         proxy_index = selection[0]
         source_index = self.proxy_model.mapToSource(proxy_index)
         row = source_index.row()
+        student = self.students_model.get_student(row)
+
+        # Проверяем возможность удаления
+        if not self.students_model.can_delete_student(int(student["id"])):
+            QMessageBox.warning(
+                self,
+                "Невозможно удалить",
+                "Нельзя удалить студента, который:\n"
+                "- заселен в комнату\n"
+                "- имеет активные заявки (статус 'Создана' или 'В обработке')\n\n"
+                "Сначала выселите студента и/или обработайте все заявки.",
+            )
+            return
 
         reply = QMessageBox.question(
             self,
@@ -1315,7 +1364,7 @@ class StudentsWidget(QWidget):
                 QMessageBox.information(self, "Успех", "Студент удалён.")
             else:
                 QMessageBox.warning(self, "Ошибка", "Не удалось удалить студента.")
-
+                
     def edit_multiple_students(self):
         """Редактирование нескольких выбранных студентов"""
         selection = self.table_view.selectionModel().selectedRows()
@@ -1389,7 +1438,7 @@ class StudentsWidget(QWidget):
                         "Ошибка", 
                         "Не удалось обновить студентов."
                     )
-    
+        
     def delete_multiple_students(self):
         """Удаление нескольких выбранных студентов"""
         selection = self.table_view.selectionModel().selectedRows()
@@ -1398,6 +1447,23 @@ class StudentsWidget(QWidget):
             return
             
         rows = [self.proxy_model.mapToSource(index).row() for index in selection]
+        
+        # Проверяем всех студентов перед удалением
+        cannot_delete = []
+        for row in rows:
+            student = self.students_model.get_student(row)
+            if student and not self.students_model.can_delete_student(int(student["id"])):
+                cannot_delete.append(f"{student['fio']} (ID: {student['id']})")
+        
+        if cannot_delete:
+            QMessageBox.warning(
+                self,
+                "Невозможно удалить",
+                "Следующие студенты не могут быть удалены (заселены или имеют активные заявки):\n\n" +
+                "\n".join(cannot_delete) +
+                "\n\nПеред удалением выселите их и обработайте заявки."
+            )
+            return
         
         reply = QMessageBox.question(
             self,
@@ -1419,7 +1485,6 @@ class StudentsWidget(QWidget):
                     "Ошибка", 
                     "Не удалось удалить студентов."
                 )
-
 
 # Виджет для отображения списка комнат
 # Виджет для отображения списка комнат
